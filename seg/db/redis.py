@@ -7,7 +7,7 @@ from redis.asyncio import Redis as AsyncRedis
 redis_cache: AsyncRedis | None = None
 
 
-def get_redis_cache() -> AsyncRedis:
+def get_redis() -> AsyncRedis:
     """Redis connection factory.
 
     :returns: AsyncRedis instance.

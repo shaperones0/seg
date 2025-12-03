@@ -41,7 +41,8 @@ class Migration(BaseMigration):
         )""")
         await self.conn.execute("""
         CREATE TABLE segment_user (
-            segment UUID NOT NULL REFERENCES segments (id),
+            segment UUID NOT NULL REFERENCES segments (id)
+                ON DELETE CASCADE,
             user_id INT NOT NULL 
         )""")
         await self.conn.execute("""

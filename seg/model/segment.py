@@ -1,7 +1,8 @@
 """Segment model."""
 
-from uuid import UUID
-from datetime import datetime
+from typing import Self
+from uuid import UUID, uuid4
+from datetime import datetime, UTC
 
 from pydantic import BaseModel
 
@@ -14,6 +15,21 @@ class Segment(BaseModel):
 
     created: datetime
     modified: datetime
+
+    @classmethod
+    def create(cls, name: str) -> Self:
+        """Create a new segment.
+
+        :param name: The name of the segment.
+        :returns: The created segment.
+        """
+
+        return cls(
+            id=uuid4(),
+            name=name,
+            created=datetime.now(UTC),
+            modified=datetime.now(UTC)
+        )
 
 
 class SegmentUser(BaseModel):
