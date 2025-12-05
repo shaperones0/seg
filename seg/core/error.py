@@ -25,6 +25,10 @@ class BackoffError(ConnectionError, RequestError):
         )
 
 
+class UniqueError(RequestError):
+    pass
+
+
 class ErrInfo(BaseModel):
     """Error info model."""
 

@@ -1,13 +1,13 @@
 """Segments management service."""
 
-from typing import Annotated
+from typing import Annotated, Final
 from functools import lru_cache
 from collections.abc import Iterable, Sequence
 from uuid import UUID
 from datetime import timedelta
 
 from fastapi import Depends
-from asyncpg import ConnectionRejectionError
+from asyncpg import ConnectionRejectionError, UniqueViolationError
 
 from seg.core import error
 from seg.core.backoff import backoff
@@ -19,7 +19,7 @@ from seg.model.segment import (
     SegmentUser as ModelSegmentUser,
 )
 
-REDIS_TTL = timedelta(minutes=5)
+REDIS_TTL: Final[timedelta] = timedelta(minutes=5)
 
 
 class SegmentService:
@@ -92,7 +92,7 @@ class SegmentService:
         if like:
             db_result = await self.db.fetch(
                 "SELECT * FROM segments "
-                "WHERE name LIKE '%$1%' "
+                "WHERE name LIKE $1 "
                 "ORDER BY id DESC "
                 "LIMIT $2 OFFSET $3",
                 like, limit, offset
@@ -118,16 +118,21 @@ class SegmentService:
             segments: Sequence[ModelSegment]
     ) -> None:
         """Insert new segments."""
-        await self.db.executemany(
-            "INSERT INTO segments (id, name, created, modified) "
-            "VALUES ($1, $2, $3, $4)",
-            [[
-                segment.id,
-                segment.name,
-                segment.created,
-                segment.modified
-            ] for segment in segments]
-        )
+
+        try:
+            async with self.db.transaction():
+                await self.db.executemany(
+                    "INSERT INTO segments (id, name, created, modified) "
+                    "VALUES ($1, $2, $3, $4)",
+                    [[
+                        segment.id,
+                        segment.name,
+                        segment.created,
+                        segment.modified
+                    ] for segment in segments]
+                )
+        except UniqueViolationError as exc:
+            raise error.UniqueError from exc
         await self.redis.flushall()
 
     async def _sql_segment_delete(

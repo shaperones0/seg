@@ -2,6 +2,7 @@
 
 from typing import Annotated
 from uuid import UUID
+import textwrap as tw
 
 from fastapi import APIRouter, Depends, status, Form, Query
 from pydantic import AfterValidator
@@ -9,6 +10,7 @@ from pydantic import AfterValidator
 from seg.core import error, format
 from seg.service import segment as service_segment
 from seg.api.v1 import schema
+from seg.core.config import PATTERN_SEG_NAME
 
 router = APIRouter()
 
@@ -47,13 +49,16 @@ async def view(
                 ge=1,
             )
         ],
-        substr: Annotated[
+        like: Annotated[
             str | None,
             Query(
-                title="Segment title substring",
-                description="Substring to look for in segment titles",
+                title="Pattern to look for in names",
+                description=tw.dedent("""
+                    Postgres LIKE pattern to look for in names; 
+                    empty for no filtering"""),
                 max_length=255,
-                min_length=1
+                min_length=1,
+                regex=PATTERN_SEG_NAME
             )
         ] = None
 ) -> list[schema.SegmentView]:
@@ -62,7 +67,7 @@ async def view(
     segments = await segment.segments_view(
         limit=pgl,
         offset=pgi * pgl,
-        like=substr
+        like=like
     )
 
     return [

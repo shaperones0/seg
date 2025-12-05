@@ -8,6 +8,7 @@ Default values assume local development environment:
 
 from logging import config as logging_config
 from pathlib import Path
+from typing import Final
 
 from dotenv import find_dotenv, load_dotenv
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -50,3 +51,6 @@ if find_dotenv():
 
 SETTINGS = Settings()
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# global patterns
+PATTERN_SEG_NAME: Final[str] = r"^[a-zA-Z0-9а-яёА-ЯЁ_ %]*$"
