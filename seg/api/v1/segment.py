@@ -1,6 +1,7 @@
 """Segment creation/assignation related endpoints."""
 
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, status, Form, Query
 from pydantic import AfterValidator
@@ -99,3 +100,44 @@ async def create(
 ) -> None:
     """Create a new segment."""
     await segment.segment_create(names)
+
+
+@router.delete(
+    '/',
+    summary='Delete segments',
+    responses=format.responses(
+        errors={
+
+        },
+        descriptions={
+
+        }
+    )
+)
+async def delete(
+        segment: Annotated[
+            service_segment.SegmentService,
+            Depends(service_segment.get_service)
+        ],
+        names: Annotated[
+            list[str] | None,
+            Query(
+                title="Names of segments to delete (optional)",
+                description="Names of segments to delete",
+                max_length=1000
+            )
+        ] = None,
+        ids: Annotated[
+            list[UUID] | None,
+            Query(
+                title="IDs of segments to delete (optional)",
+                description="IDs of segments to delete",
+                max_length=1000
+            )
+        ] = None,
+) -> None:
+    """Delete segments."""
+    await segment.segments_delete(
+        segments_names=names,
+        segments_ids=ids,
+    )

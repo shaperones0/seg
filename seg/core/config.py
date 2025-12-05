@@ -19,7 +19,7 @@ class RedisSettings(BaseSettings):
     """Redis database connection settings."""
 
     model_config = SettingsConfigDict(env_prefix="redis_")
-    url: str = "redis://localhost:6380"
+    url: str = "redis://localhost:6379"
 
 
 class PostgresSettings(BaseSettings):

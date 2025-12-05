@@ -10,6 +10,7 @@ from fastapi import Depends
 from psqlpy.exceptions import (
     BaseConnectionError,
 )
+from psqlpy.extra_types import TextArray, UUIDArray
 
 from seg.core import error
 from seg.core.backoff import backoff
@@ -80,6 +81,19 @@ class SegmentService:
 
         return result
 
+    async def segments_delete(
+            self,
+            *,
+            segments_names: Sequence[str],
+            segments_ids: Sequence[UUID],
+    ) -> None:
+        """Delete segments."""
+        await self._sql_segment_delete(
+            segments_names=segments_names,
+            segments_ids=segments_ids,
+        )
+        await self.redis.flushall()
+
     @backoff(
         BaseConnectionError,
         max_retries=3,
@@ -132,6 +146,21 @@ class SegmentService:
             ] for segment in segments]
         )
         await self.redis.flushall()
+
+    async def _sql_segment_delete(
+            self,
+            *,
+            segments_names: Sequence[str],
+            segments_ids: Sequence[UUID],
+    ) -> None:
+        """Delete segments."""
+        await self.db.execute(
+            querystring="DELETE FROM segments WHERE name IN ($1)",
+            parameters=[
+                list(segments_names),
+
+            ]
+        )
 
 
 def get_service(
