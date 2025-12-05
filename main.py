@@ -8,7 +8,7 @@ from functools import wraps
 from typing import Any
 
 import typer
-from psqlpy import Connection
+from seg.db.pg import PostgresConnection
 
 app = typer.Typer()
 
@@ -32,7 +32,7 @@ def coro(func: Callable) -> Callable:
 
 
 @asynccontextmanager
-async def init_connection() -> AsyncGenerator[Connection]:
+async def init_connection() -> AsyncGenerator[PostgresConnection]:
     """Initialize Postgres connection.
 
     Closes the connection when leaving the scope.

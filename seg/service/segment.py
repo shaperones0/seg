@@ -11,7 +11,7 @@ from asyncpg import ConnectionRejectionError, UniqueViolationError
 
 from seg.core import error
 from seg.core.backoff import backoff
-from seg.db.pg import Connection, get_pg
+from seg.db.pg import PostgresConnection, get_pg
 from seg.db.redis import AsyncRedis, get_redis
 from seg.model.segment import (
     Segment as ModelSegment,
@@ -25,7 +25,7 @@ REDIS_TTL: Final[timedelta] = timedelta(minutes=5)
 class SegmentService:
     """Segment management service."""
 
-    def __init__(self, db: Connection, redis: AsyncRedis) -> None:
+    def __init__(self, db: PostgresConnection, redis: AsyncRedis) -> None:
         self.db = db
         self.redis = redis
 
@@ -149,7 +149,7 @@ class SegmentService:
 
 
 def get_service(
-    db: Annotated[Connection, Depends(get_pg)],
+    db: Annotated[PostgresConnection, Depends(get_pg)],
     redis: Annotated[AsyncRedis, Depends(get_redis)],
 ) -> SegmentService:
     return SegmentService(db, redis)
