@@ -138,6 +138,6 @@ async def delete(
 ) -> None:
     """Delete segments."""
     await segment.segments_delete(
-        segments_names=names,
-        segments_ids=ids,
+        segments_names=names or [],
+        segments_ids=ids or [],
     )

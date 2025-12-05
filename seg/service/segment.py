@@ -7,14 +7,11 @@ from uuid import UUID
 from datetime import timedelta
 
 from fastapi import Depends
-from psqlpy.exceptions import (
-    BaseConnectionError,
-)
-from psqlpy.extra_types import TextArray, UUIDArray
+from asyncpg import ConnectionRejectionError
 
 from seg.core import error
 from seg.core.backoff import backoff
-from seg.db.pg import DbConnection, get_pg
+from seg.db.pg import Connection, get_pg
 from seg.db.redis import AsyncRedis, get_redis
 from seg.model.segment import (
     Segment as ModelSegment,
@@ -28,7 +25,7 @@ REDIS_TTL = timedelta(minutes=5)
 class SegmentService:
     """Segment management service."""
 
-    def __init__(self, db: DbConnection, redis: AsyncRedis) -> None:
+    def __init__(self, db: Connection, redis: AsyncRedis) -> None:
         self.db = db
         self.redis = redis
 
@@ -56,24 +53,10 @@ class SegmentService:
         key = f"segv:{limit}:{offset}:{like}"
         redis_str: str | None = await self.redis.get(key)
         if redis_str is None:
-            if like:
-                db_result = await self.db.fetch(
-                    "SELECT * FROM segments "
-                    "WHERE name LIKE '%$1%' "
-                    "ORDER BY id DESC "
-                    "LIMIT $2 OFFSET $3",
-                    (like, limit, offset)
-                )
-            else:
-                db_result = await self.db.fetch(
-                    "SELECT * FROM segments "
-                    "ORDER BY id DESC "
-                    "LIMIT $1 OFFSET $2",
-                    (limit, offset)
-                )
-
-            result = ModelSegmentList(
-                items=[ModelSegment(**row) for row in db_result.result()]
+            result = await self._sql_segment_select(
+                limit=limit,
+                offset=offset,
+                like=like,
             )
             await self.redis.set(key, result.model_dump_json(), ex=REDIS_TTL)
         else:
@@ -95,7 +78,7 @@ class SegmentService:
         await self.redis.flushall()
 
     @backoff(
-        BaseConnectionError,
+        OSError,
         max_retries=3,
         service_name="Segment Service",
     )
@@ -112,21 +95,21 @@ class SegmentService:
                 "WHERE name LIKE '%$1%' "
                 "ORDER BY id DESC "
                 "LIMIT $2 OFFSET $3",
-                (like, limit, offset)
+                like, limit, offset
             )
         else:
             db_result = await self.db.fetch(
                 "SELECT * FROM segments "
                 "ORDER BY id DESC "
                 "LIMIT $1 OFFSET $2",
-                (limit, offset)
+                limit, offset
             )
         return ModelSegmentList(
-            items=[ModelSegment(**row) for row in db_result.result()]
+            items=[ModelSegment(**row) for row in db_result]
         )
 
     @backoff(
-        BaseConnectionError,
+        OSError,
         max_retries=3,
         service_name="Segment Service",
     )
@@ -135,7 +118,7 @@ class SegmentService:
             segments: Sequence[ModelSegment]
     ) -> None:
         """Insert new segments."""
-        await self.db.execute_many(
+        await self.db.executemany(
             "INSERT INTO segments (id, name, created, modified) "
             "VALUES ($1, $2, $3, $4)",
             [[
@@ -155,16 +138,13 @@ class SegmentService:
     ) -> None:
         """Delete segments."""
         await self.db.execute(
-            querystring="DELETE FROM segments WHERE name IN ($1)",
-            parameters=[
-                list(segments_names),
-
-            ]
+            "DELETE FROM segments WHERE name = any($1::text[]) OR id = any($2::uuid[])",
+            tuple(segments_names), tuple(segments_ids)
         )
 
 
 def get_service(
-    db: Annotated[DbConnection, Depends(get_pg)],
+    db: Annotated[Connection, Depends(get_pg)],
     redis: Annotated[AsyncRedis, Depends(get_redis)],
 ) -> SegmentService:
     return SegmentService(db, redis)
