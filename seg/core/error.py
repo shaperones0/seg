@@ -19,9 +19,9 @@ class RequestError(Exception):
 class BackoffError(ConnectionError, RequestError):
     status_code: ClassVar[int] = status.HTTP_503_SERVICE_UNAVAILABLE
 
-    def __init__(self, func_name: str, retries: int) -> None:
+    def __init__(self, service_name: str) -> None:
         super(ConnectionError, self).__init__(
-            f"{func_name} didn't respond after {retries} retries"
+            f"{service_name} can't establish internal connection."
         )
 
 

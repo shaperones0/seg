@@ -64,7 +64,10 @@ async def view(
         like=substr
     )
 
-    return [schema.SegmentView(id=seg.id, name=seg.name) for seg in segments]
+    return [
+        schema.SegmentView(id=seg.id, name=seg.name)
+        for seg in segments.items
+    ]
 
 
 @router.post(
@@ -95,5 +98,4 @@ async def create(
         ]
 ) -> None:
     """Create a new segment."""
-
     await segment.segment_create(names)

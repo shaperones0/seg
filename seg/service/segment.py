@@ -4,16 +4,24 @@ from typing import Annotated
 from functools import lru_cache
 from collections.abc import Iterable, Sequence
 from uuid import UUID
+from datetime import timedelta
 
 from fastapi import Depends
+from psqlpy.exceptions import (
+    BaseConnectionError,
+)
 
 from seg.core import error
+from seg.core.backoff import backoff
 from seg.db.pg import DbConnection, get_pg
 from seg.db.redis import AsyncRedis, get_redis
 from seg.model.segment import (
     Segment as ModelSegment,
+    SegmentList as ModelSegmentList,
     SegmentUser as ModelSegmentUser,
 )
+
+REDIS_TTL = timedelta(minutes=5)
 
 
 class SegmentService:
@@ -31,6 +39,7 @@ class SegmentService:
 
         segments = tuple(ModelSegment.create(name) for name in segments_names)
         await self._sql_segment_insert(segments)
+        await self.redis.flushall()
         return segments
 
     async def segments_view(
@@ -39,11 +48,52 @@ class SegmentService:
             limit: int,
             offset: int,
             like: str
-    ) -> list[ModelSegment]:
+    ) -> ModelSegmentList:
         """List available segments."""
 
+        result: ModelSegmentList
+        key = f"segv:{limit}:{offset}:{like}"
+        redis_str: str | None = await self.redis.get(key)
+        if redis_str is None:
+            if like:
+                db_result = await self.db.fetch(
+                    "SELECT * FROM segments "
+                    "WHERE name LIKE '%$1%' "
+                    "ORDER BY id DESC "
+                    "LIMIT $2 OFFSET $3",
+                    (like, limit, offset)
+                )
+            else:
+                db_result = await self.db.fetch(
+                    "SELECT * FROM segments "
+                    "ORDER BY id DESC "
+                    "LIMIT $1 OFFSET $2",
+                    (limit, offset)
+                )
+
+            result = ModelSegmentList(
+                items=[ModelSegment(**row) for row in db_result.result()]
+            )
+            await self.redis.set(key, result.model_dump_json(), ex=REDIS_TTL)
+        else:
+            result = ModelSegmentList.model_validate_json(redis_str)
+
+        return result
+
+    @backoff(
+        BaseConnectionError,
+        max_retries=3,
+        service_name="Segment Service",
+    )
+    async def _sql_segment_select(
+            self,
+            *,
+            limit: int,
+            offset: int,
+            like: str
+    ) -> ModelSegmentList:
         if like:
-            results = await self.db.fetch(
+            db_result = await self.db.fetch(
                 "SELECT * FROM segments "
                 "WHERE name LIKE '%$1%' "
                 "ORDER BY id DESC "
@@ -51,15 +101,21 @@ class SegmentService:
                 (like, limit, offset)
             )
         else:
-            results = await self.db.fetch(
+            db_result = await self.db.fetch(
                 "SELECT * FROM segments "
                 "ORDER BY id DESC "
                 "LIMIT $1 OFFSET $2",
                 (limit, offset)
             )
+        return ModelSegmentList(
+            items=[ModelSegment(**row) for row in db_result.result()]
+        )
 
-        return [ModelSegment(**row) for row in results.result()]
-
+    @backoff(
+        BaseConnectionError,
+        max_retries=3,
+        service_name="Segment Service",
+    )
     async def _sql_segment_insert(
             self,
             segments: Sequence[ModelSegment]
@@ -75,6 +131,7 @@ class SegmentService:
                 segment.modified
             ] for segment in segments]
         )
+        await self.redis.flushall()
 
 
 def get_service(

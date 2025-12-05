@@ -1,4 +1,5 @@
 from collections.abc import Callable, Awaitable
+from contextlib import AbstractContextManager
 from functools import wraps, lru_cache
 from logging import getLogger
 from secrets import SystemRandom
@@ -6,6 +7,7 @@ import math
 import asyncio
 
 from seg.core import error
+from seg.core.type import scast
 
 logger = getLogger(__name__)
 
@@ -38,20 +40,30 @@ def nrandom(u1: float | None = None, u2: float | None = None) -> float:
     return math.sqrt(-2 * math.log(u1)) * math.cos(2 * math.pi * u2)
 
 
-def backoff(
-    start_sleep_time: float = 0.1,
-    factor: float = 2.0,
-    max_sleep_time: float = 10.0,
-    jitter: float = 0.1,
-    max_retries: int = 30,
-) -> Callable:
-    """Make function retry itself if it returns False.
+def backoff[
+        **T_og_params,
+        T_og_ret,
+        T_decorated = Callable[T_og_params, Awaitable[T_og_ret]]
+](
+        *exceptions: type[BaseException],
+        start_sleep_time: float = 0.1,
+        factor: float = 2.0,
+        max_sleep_time: float = 10.0,
+        jitter: float = 0.1,
+        max_retries: int = 30,
+        service_name: str | None = None,
+) -> Callable[
+        [T_decorated],
+        T_decorated
+]:
+    """Make function retry itself if it raises an exception.
 
     Decorated function is relaunched with increasing
     time intervals between launches until it returns
     True or the maximum number
     of retries is exceeded, on which an error is thrown.
 
+    :param exceptions: Exceptions to catch.
     :param start_sleep_time: Initial delay after
       the first unsuccessful attempt, in ms.
     :param factor: By how much to multiply the
@@ -61,34 +73,45 @@ def backoff(
       each unsuccessful attempt.
     :param max_retries: The maximum number of retries
       after which an exception is raised.
+    :param service_name: Name of the service for logging and error reporting.
     :return: Decorated function.
     :raises BackoffError: Exceeded maximum number of retries.
     """
 
-    def decorator[**og_params](
-            func: Callable[og_params, Awaitable[bool]]
-    ) -> Callable[og_params, Awaitable[None]]:
+    def decorator(
+            func: T_decorated
+    ) -> T_decorated:
+        nonlocal service_name
+        if service_name is None:
+            service_name = scast(str, func.__name__)
         @wraps(func)
         async def wrapper(
-                *args: og_params.args,
-                **kwargs: og_params.kwargs
-        ) -> None:
+                *args: T_og_params.args,
+                **kwargs: T_og_params.kwargs
+        ) -> T_og_ret:
             delay = start_sleep_time
             retries = 0
             while True:
-                if func(*args, **kwargs):
-                    # OK, got a response
-                    break
+                try:
+                    return await func(*args, **kwargs)
+                except exceptions as e:
+                    # wahoo
+                    exc = e
+                exc_name = exc.__class__.__name__ if exc else ""
 
                 # error happened, check if exceed max retries
                 if retries >= max_retries:
-                    raise error.BackoffError(func.__name__, retries)
+                    logger.error(
+                        "%s exceeded max retries (%d).",
+                        service_name, max_retries
+                    )
+                    raise error.BackoffError(service_name)
                 retries += 1
 
                 # pause between requests
                 logger.warning(
-                    "%s timeout. Retrying in %s",
-                    func.__name__, delay
+                    "%s timeout #%d (%s). Retrying in %s",
+                    service_name, retries, exc_name, delay
                 )
                 await asyncio.sleep(delay)
 
@@ -99,3 +122,28 @@ def backoff(
         return wrapper
 
     return decorator
+
+
+class Suppress(AbstractContextManager):
+    """Context manager to suppress specified exceptions"""
+
+    def __init__(self, *exceptions):
+        self._exceptions = exceptions
+        self.raised = False
+
+    def __enter__(self):
+        pass
+
+    def __exit__(self, exctype, excinst, exctb):
+        # Copied from contextlib.supress
+        if exctype is None:
+            return None
+        self.raised = True
+        if issubclass(exctype, self._exceptions):
+            return True
+        if issubclass(exctype, BaseExceptionGroup):
+            match, rest = excinst.split(self._exceptions)
+            if rest is None:
+                return True
+            raise rest
+        return False

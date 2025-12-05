@@ -3,9 +3,25 @@
 from collections.abc import AsyncGenerator
 
 import psqlpy
-from psqlpy import Connection as DbConnection
+from psqlpy import (
+    Connection as DbConnection,
+)
+from psqlpy.exceptions import BaseConnectionPoolError
+
+from seg.core.backoff import backoff
 
 pg_conn_pool: psqlpy.ConnectionPool | None = None
+
+
+@backoff(
+    BaseConnectionPoolError,
+    max_retries=3,
+    service_name="DB Connection Pool",
+)
+async def _acquire_and_check() -> DbConnection:
+    conn = pg_conn_pool.acquire()
+    await conn.__aenter__()
+    return conn
 
 
 async def get_pg() -> AsyncGenerator[DbConnection]:
@@ -15,7 +31,8 @@ async def get_pg() -> AsyncGenerator[DbConnection]:
 
     :returns: Postgres connection.
     """
-    async with pg_conn_pool.acquire() as conn:
+
+    async with await _acquire_and_check() as conn:
         yield conn
 
 

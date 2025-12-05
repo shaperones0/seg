@@ -32,8 +32,16 @@ class Segment(BaseModel):
         )
 
 
+class SegmentList(BaseModel):
+    items: list[Segment]
+
+
 class SegmentUser(BaseModel):
     """Segment-to-user relation."""
 
     segment: UUID
     user: int
+
+
+class SegmentUsers(BaseModel):
+    items: list[SegmentUser]

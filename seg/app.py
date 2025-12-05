@@ -58,7 +58,7 @@ app = FastAPI(
 def request_error_handler(_: Request, exc: RequestError) -> NoReturn:
     raise HTTPException(
         status_code=exc.status_code,
-        detail=ErrInfo.from_err(exc)
+        detail=ErrInfo.from_err(exc).model_dump()
     )
 
 
