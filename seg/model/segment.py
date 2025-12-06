@@ -37,6 +37,11 @@ class User(BaseModel):
     id: int
 
 
+class Users(BaseModel):
+    """Users model."""
+    items: tuple[User, ...]
+
+
 class Segments(BaseModel):
     items: tuple[Segment, ...]
 

@@ -27,3 +27,12 @@ class InputSegmentName(BaseModel):
 class InputSegmentUpdate(BaseModel):
     id: UUID
     new_name: str
+
+
+class UserView(BaseModel):
+    id: int
+
+
+class InputUserUpdate(BaseModel):
+    id: int
+    new_id: int

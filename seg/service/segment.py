@@ -53,15 +53,19 @@ class SegmentService:
         """List available segments."""
 
         result: ModelSegmentList
-        key = f"segv:{limit}:{offset}:{name}"
-        redis_str: str | None = await self.redis.get(key)
+        redis_key = f"segv:{limit}:{offset}:{name}"
+        redis_str: str | None = await self.redis.get(redis_key)
         if redis_str is None:
             result = await self._sql_segment_select(
                 limit=limit,
                 offset=offset,
                 name=name,
             )
-            await self.redis.set(key, result.model_dump_json(), ex=REDIS_TTL)
+            await self.redis.set(
+                redis_key,
+                result.model_dump_json(),
+                ex=REDIS_TTL
+            )
         else:
             result = ModelSegmentList.model_validate_json(redis_str)
 

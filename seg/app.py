@@ -16,7 +16,8 @@ from fastapi.responses import ORJSONResponse
 from starlette.datastructures import MutableHeaders
 
 from seg.api.v1 import (
-    segment as api_segment
+    segment as api_segment,
+    user as api_user,
 )
 from seg.core.config import SETTINGS
 from seg.db import pg, redis
@@ -63,6 +64,7 @@ def request_error_handler(_: Request, exc: RequestError) -> NoReturn:
 
 
 app.include_router(api_segment.router, prefix="/api/v1/seg", tags=["segment"])
+app.include_router(api_user.router, prefix="/api/v1/u", tags=["user"])
 
 
 def main() -> None:

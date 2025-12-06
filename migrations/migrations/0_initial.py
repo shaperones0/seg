@@ -41,8 +41,9 @@ class Migration(BaseMigration):
             modified TIMESTAMP with time zone NOT NULL
                 DEFAULT (now() at time zone 'UTC')
         );
-        CREATE TABLE users (
-            id BIGSERIAL NOT NULL PRIMARY KEY
+        CREATE TABLE users
+        (
+            id BIGINT NOT NULL PRIMARY KEY
         );
         CREATE TABLE segment_user
         (
