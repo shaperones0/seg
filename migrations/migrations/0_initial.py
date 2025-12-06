@@ -51,7 +51,7 @@ class Migration(BaseMigration):
             usr BIGINT NOT NULL REFERENCES users (id)
         );
         CREATE INDEX segment_user_seg ON segment_user (seg);
-        CREATE INDEX segment_user_user ON segment_user (usr);
+        CREATE INDEX segment_user_usr ON segment_user (usr);
         """)
 
     async def downgrade(self) -> None:
@@ -61,5 +61,7 @@ class Migration(BaseMigration):
         """
         logger.info("Deleting users, revoked_* and login_history tables")
         await self.conn.execute("DROP TABLE segment_user")
+        await self.conn.execute("DROP TABLE users")
         await self.conn.execute("DROP TABLE segments")
-        await self.conn.execute("DROP INDEX segment_user_id")
+        await self.conn.execute("DROP INDEX segment_user_seg")
+        await self.conn.execute("DROP INDEX segment_user_usr")
