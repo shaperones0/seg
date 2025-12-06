@@ -8,7 +8,7 @@ from pathlib import Path
 from types import ModuleType
 from typing import Self
 
-from psqlpy import Connection
+from seg.db.pg import PostgresConnection
 
 from migrations.base import BaseMigration
 
@@ -57,7 +57,7 @@ class MigrationDict:
     @classmethod
     def from_path(
             cls,
-            connection: Connection,
+            connection: PostgresConnection,
             base_dir: str | os.PathLike[str] | None = None
     ) -> Self:
         """Generate migration dictionary from python files in given directory.
@@ -116,7 +116,7 @@ class MigrationDict:
 class MigrationManager:
     """Manage lists of applied migrations."""
 
-    def __init__(self, connection: Connection) -> None:
+    def __init__(self, connection: PostgresConnection) -> None:
         """Create a new migration manager.
 
         :param connection: Postgres connection.
@@ -143,7 +143,7 @@ class MigrationManager:
         """)
 
         applied: list[str] = []
-        for row in rows.result():
+        for row in rows:
             logger.debug("applied: %s at %s", row["name"], row["applied_at"])
             applied.append(row["name"])
         return applied
@@ -153,7 +153,7 @@ class MigrationManager:
 
         :param migration_names: Names of applied migrations.
         """
-        await self.connection.execute_many(
+        await self.connection.executemany(
             """INSERT INTO migrations (name)
                VALUES ($1)
                ON CONFLICT DO NOTHING""",

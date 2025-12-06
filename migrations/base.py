@@ -2,7 +2,7 @@
 
 from abc import ABC, abstractmethod
 
-from psqlpy import Connection
+from seg.db.pg import PostgresConnection
 
 
 class BaseMigration(ABC):
@@ -11,7 +11,7 @@ class BaseMigration(ABC):
     Inherit it to create your own migrations.
     """
 
-    def __init__(self, conn: Connection) -> None:
+    def __init__(self, conn: PostgresConnection) -> None:
         """Initialize the migrations with given database connection.
 
         :param conn: Database connection.

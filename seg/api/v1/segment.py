@@ -4,7 +4,7 @@ from typing import Annotated
 from uuid import UUID
 import textwrap as tw
 
-from fastapi import APIRouter, Depends, status, Form, Query
+from fastapi import APIRouter, Depends, status, Body, Query
 from pydantic import AfterValidator
 
 from seg.core import error, format
@@ -49,13 +49,13 @@ async def view(
                 ge=1,
             )
         ],
-        like: Annotated[
+        name: Annotated[
             str | None,
             Query(
-                title="Pattern to look for in names",
-                description=tw.dedent("""
-                    Postgres LIKE pattern to look for in names; 
-                    empty for no filtering"""),
+                title="Name to search for",
+                description=tw.dedent(
+                    """Name of the segment to look for 
+                    in the database; omit for no filtering"""),
                 max_length=255,
                 min_length=1,
                 regex=PATTERN_SEG_NAME
@@ -67,7 +67,7 @@ async def view(
     segments = await segment.segments_view(
         limit=pgl,
         offset=pgi * pgl,
-        like=like
+        name=name
     )
 
     return [
@@ -95,11 +95,12 @@ async def create(
         ],
         names: Annotated[
             list[str],
-            Query(
+            Body(
                 title="Names of segments to create",
                 description="Names of segments to create",
                 min_length=1,
-                max_length=100
+                max_length=100,
+                regex=PATTERN_SEG_NAME
             )
         ]
 ) -> None:
@@ -126,15 +127,17 @@ async def delete(
         ],
         names: Annotated[
             list[str] | None,
-            Query(
+            Body(
                 title="Names of segments to delete (optional)",
                 description="Names of segments to delete",
-                max_length=1000
+                min_length=1,
+                max_length=1000,
+                regex=PATTERN_SEG_NAME
             )
         ] = None,
         ids: Annotated[
             list[UUID] | None,
-            Query(
+            Body(
                 title="IDs of segments to delete (optional)",
                 description="IDs of segments to delete",
                 max_length=1000
@@ -145,4 +148,36 @@ async def delete(
     await segment.segments_delete(
         segments_names=names or [],
         segments_ids=ids or [],
+    )
+
+
+@router.put(
+    '/',
+    summary='Update segments',
+    responses=format.responses(
+        errors={
+
+        },
+        descriptions={
+
+        }
+    )
+)
+async def update(
+        segment: Annotated[
+            service_segment.SegmentService,
+            Depends(service_segment.get_service)
+        ],
+        updates: Annotated[
+            list[schema.InputSegmentUpdate],
+            Body(
+                title="Names of segments to update",
+                description="Names of segments to update",
+            )
+        ]
+) -> None:
+    """Update segments."""
+
+    await segment.segments_update(
+        ids_names={upd.id: upd.new_name for upd in updates}
     )

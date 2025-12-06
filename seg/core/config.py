@@ -53,4 +53,4 @@ SETTINGS = Settings()
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # global patterns
-PATTERN_SEG_NAME: Final[str] = r"^[a-zA-Z0-9а-яёА-ЯЁ_ %]*$"
+PATTERN_SEG_NAME: Final[str] = r"^[a-zA-Z0-9а-яёА-ЯЁ_]*$"

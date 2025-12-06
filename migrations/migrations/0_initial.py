@@ -28,25 +28,30 @@ class Migration(BaseMigration):
 
         Also set up indexes where needed.
         """
-        logger.info("Creating segments, segment_user tables")
+        logger.info("Creating segments, users and segment_user tables")
+
         await self.conn.execute("""
-        CREATE TABLE segments (
-            id UUID PRIMARY KEY NOT NULL,
-            name VARCHAR(255) UNIQUE NOT NULL,
-            
-            created TIMESTAMP with time zone NOT NULL
+        CREATE TABLE segments
+        (
+            id       UUID PRIMARY KEY         NOT NULL,
+            name     VARCHAR(255) UNIQUE      NOT NULL,
+
+            created  TIMESTAMP with time zone NOT NULL
                 DEFAULT (now() at time zone 'UTC'),
             modified TIMESTAMP with time zone NOT NULL
                 DEFAULT (now() at time zone 'UTC')
-        )""")
-        await self.conn.execute("""
-        CREATE TABLE segment_user (
-            segment UUID NOT NULL REFERENCES segments (id)
+        );
+        CREATE TABLE users (
+            id BIGSERIAL NOT NULL PRIMARY KEY
+        );
+        CREATE TABLE segment_user
+        (
+            seg UUID   NOT NULL REFERENCES segments (id)
                 ON DELETE CASCADE,
-            user_id INT NOT NULL 
-        )""")
-        await self.conn.execute("""
-        CREATE INDEX segment_user_id ON segment_user (user_id)
+            usr BIGINT NOT NULL REFERENCES users (id)
+        );
+        CREATE INDEX segment_user_seg ON segment_user (seg);
+        CREATE INDEX segment_user_user ON segment_user (usr);
         """)
 
     async def downgrade(self) -> None:

@@ -2,7 +2,7 @@
 
 from typing import Annotated, Final
 from functools import lru_cache
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Sequence, Mapping
 from uuid import UUID
 from datetime import timedelta
 
@@ -45,18 +45,18 @@ class SegmentService:
             *,
             limit: int,
             offset: int,
-            like: str
+            name: str
     ) -> ModelSegmentList:
         """List available segments."""
 
         result: ModelSegmentList
-        key = f"segv:{limit}:{offset}:{like}"
+        key = f"segv:{limit}:{offset}:{name}"
         redis_str: str | None = await self.redis.get(key)
         if redis_str is None:
             result = await self._sql_segment_select(
                 limit=limit,
                 offset=offset,
-                like=like,
+                name=name,
             )
             await self.redis.set(key, result.model_dump_json(), ex=REDIS_TTL)
         else:
@@ -77,6 +77,17 @@ class SegmentService:
         )
         await self.redis.flushall()
 
+    async def segments_update(
+            self,
+            *,
+            ids_names: Mapping[UUID, str],
+    ) -> None:
+        """Update segments."""
+        await self._sql_segment_update(
+            ids_names=ids_names,
+        )
+        await self.redis.flushall()
+
     @backoff(
         OSError,
         max_retries=3,
@@ -87,15 +98,15 @@ class SegmentService:
             *,
             limit: int,
             offset: int,
-            like: str
+            name: str
     ) -> ModelSegmentList:
-        if like:
+        if name:
             db_result = await self.db.fetch(
                 "SELECT * FROM segments "
-                "WHERE name LIKE $1 "
+                "WHERE name = $1 "
                 "ORDER BY id DESC "
                 "LIMIT $2 OFFSET $3",
-                like, limit, offset
+                name, limit, offset
             )
         else:
             db_result = await self.db.fetch(
@@ -143,8 +154,30 @@ class SegmentService:
     ) -> None:
         """Delete segments."""
         await self.db.execute(
-            "DELETE FROM segments WHERE name = any($1::text[]) OR id = any($2::uuid[])",
+            """DELETE FROM segments 
+            WHERE 
+                name = any($1::text[]) OR 
+                id = any($2::uuid[])""",
             tuple(segments_names), tuple(segments_ids)
+        )
+
+    @backoff(
+        OSError,
+        max_retries=3,
+        service_name="Segment Service",
+    )
+    async def _sql_segment_update(
+            self,
+            *,
+            ids_names: Mapping[UUID, str],
+    ) -> None:
+        """Update segments."""
+        await self.db.executemany(
+            """UPDATE segments
+            SET name = $2,
+                modified = (now() at time zone 'UTC')
+            WHERE id = $1""",
+            ids_names.items()
         )
 
 
