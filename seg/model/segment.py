@@ -32,8 +32,13 @@ class Segment(BaseModel):
         )
 
 
-class SegmentList(BaseModel):
-    items: list[Segment]
+class User(BaseModel):
+    """User model."""
+    id: int
+
+
+class Segments(BaseModel):
+    items: tuple[Segment, ...]
 
 
 class SegmentUser(BaseModel):

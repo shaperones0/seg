@@ -1,10 +1,18 @@
 """Postgres connection management."""
 
+from typing import Final
 from collections.abc import AsyncGenerator
 
 import asyncpg
 from asyncpg import Record
 from asyncpg.connection import Connection
+
+# see https://github.com/MagicStack/asyncpg/issues/513
+CONNECTION_ERRORS: Final[type(BaseException)] = (
+    OSError,
+    asyncpg.CannotConnectNowError,
+    asyncpg.ConnectionDoesNotExistError,
+)
 
 # Monkeypatch poor quality stubs
 Connection.__class_getitem__ = classmethod(     # type: ignore[attr-defined]
@@ -28,7 +36,7 @@ async def init(postgres_connection_info: str) -> None:
     pg_conn_info = postgres_connection_info
 
 @backoff(
-    OSError,
+    *CONNECTION_ERRORS,
     max_retries=3,
     service_name="DB Connection Pool"
 )

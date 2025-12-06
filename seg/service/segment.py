@@ -11,11 +11,14 @@ from asyncpg import ConnectionRejectionError, UniqueViolationError
 
 from seg.core import error
 from seg.core.backoff import backoff
-from seg.db.pg import PostgresConnection, get_pg
+from seg.db.pg import (
+    PostgresConnection, get_pg,
+    CONNECTION_ERRORS,
+)
 from seg.db.redis import AsyncRedis, get_redis
 from seg.model.segment import (
     Segment as ModelSegment,
-    SegmentList as ModelSegmentList,
+    Segments as ModelSegmentList,
     SegmentUser as ModelSegmentUser,
 )
 
@@ -89,7 +92,7 @@ class SegmentService:
         await self.redis.flushall()
 
     @backoff(
-        OSError,
+        *CONNECTION_ERRORS,
         max_retries=3,
         service_name="Segment Service",
     )
@@ -102,25 +105,25 @@ class SegmentService:
     ) -> ModelSegmentList:
         if name:
             db_result = await self.db.fetch(
-                "SELECT * FROM segments "
-                "WHERE name = $1 "
-                "ORDER BY id DESC "
-                "LIMIT $2 OFFSET $3",
+                """SELECT * FROM segments
+                WHERE name = $1
+                ORDER BY id DESC
+                LIMIT $2 OFFSET $3""",
                 name, limit, offset
             )
         else:
             db_result = await self.db.fetch(
-                "SELECT * FROM segments "
-                "ORDER BY id DESC "
-                "LIMIT $1 OFFSET $2",
+                """SELECT * FROM segments
+                ORDER BY id DESC
+                LIMIT $1 OFFSET $2""",
                 limit, offset
             )
         return ModelSegmentList(
-            items=[ModelSegment(**row) for row in db_result]
+            items=tuple(ModelSegment(**row) for row in db_result)
         )
 
     @backoff(
-        OSError,
+        *CONNECTION_ERRORS,
         max_retries=3,
         service_name="Segment Service",
     )
@@ -133,19 +136,23 @@ class SegmentService:
         try:
             async with self.db.transaction():
                 await self.db.executemany(
-                    "INSERT INTO segments (id, name, created, modified) "
-                    "VALUES ($1, $2, $3, $4)",
-                    [[
+                    """INSERT INTO segments (id, name, created, modified)
+                    VALUES ($1, $2, $3, $4)""",
+                    ((
                         segment.id,
                         segment.name,
                         segment.created,
                         segment.modified
-                    ] for segment in segments]
+                    ) for segment in segments)
                 )
         except UniqueViolationError as exc:
             raise error.UniqueError from exc
-        await self.redis.flushall()
 
+    @backoff(
+        *CONNECTION_ERRORS,
+        max_retries=3,
+        service_name="Segment Service",
+    )
     async def _sql_segment_delete(
             self,
             *,
@@ -158,11 +165,11 @@ class SegmentService:
             WHERE 
                 name = any($1::text[]) OR 
                 id = any($2::uuid[])""",
-            tuple(segments_names), tuple(segments_ids)
+            segments_names, segments_ids
         )
 
     @backoff(
-        OSError,
+        *CONNECTION_ERRORS,
         max_retries=3,
         service_name="Segment Service",
     )
@@ -172,14 +179,17 @@ class SegmentService:
             ids_names: Mapping[UUID, str],
     ) -> None:
         """Update segments."""
-        await self.db.executemany(
-            """UPDATE segments
-            SET name = $2,
-                modified = (now() at time zone 'UTC')
-            WHERE id = $1""",
-            ids_names.items()
-        )
-
+        try:
+            async with self.db.transaction():
+                await self.db.executemany(
+                    """UPDATE segments
+                    SET name = $2,
+                        modified = (now() at time zone 'UTC')
+                    WHERE id = $1""",
+                    ids_names.items()
+                )
+        except UniqueViolationError as exc:
+            raise error.UniqueError from exc
 
 def get_service(
     db: Annotated[PostgresConnection, Depends(get_pg)],

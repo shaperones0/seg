@@ -94,18 +94,19 @@ async def create(
             Depends(service_segment.get_service)
         ],
         names: Annotated[
-            list[str],
+            list[schema.InputSegmentName],
             Body(
                 title="Names of segments to create",
                 description="Names of segments to create",
                 min_length=1,
                 max_length=100,
-                regex=PATTERN_SEG_NAME
             )
         ]
 ) -> None:
     """Create a new segment."""
-    await segment.segment_create(names)
+    await segment.segment_create(
+        (nm.name for nm in names)
+    )
 
 
 @router.delete(
