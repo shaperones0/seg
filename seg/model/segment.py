@@ -1,8 +1,8 @@
-"""Segment model."""
+"""Segment internal model."""
 
+from datetime import UTC, datetime
 from typing import Self
 from uuid import UUID, uuid4
-from datetime import datetime, UTC
 
 from pydantic import BaseModel
 
@@ -20,30 +20,40 @@ class Segment(BaseModel):
     def create(cls, name: str) -> Self:
         """Create a new segment.
 
+        Gives the segment random UUID, and current timestamps.
         :param name: The name of the segment.
         :returns: The created segment.
         """
-
         return cls(
             id=uuid4(),
             name=name,
             created=datetime.now(UTC),
-            modified=datetime.now(UTC)
+            modified=datetime.now(UTC),
         )
 
 
 class User(BaseModel):
     """User model."""
+
     id: int
 
 
-class Users(BaseModel):
-    """Users model."""
-    items: tuple[User, ...]
-
-
 class Segments(BaseModel):
+    """Collection of segments.
+
+    Used primarily for easier storage in Redis.
+    """
+
     items: tuple[Segment, ...]
+
+
+class Users(BaseModel):
+    """Collection of users.
+
+    Used primarily for easier storage in Redis
+    """
+
+    items: tuple[User, ...]
 
 
 class SegmentUser(BaseModel):
@@ -54,4 +64,9 @@ class SegmentUser(BaseModel):
 
 
 class SegmentUsers(BaseModel):
-    items: list[SegmentUser]
+    """Collection of segment-to-user relations.
+
+    Used primarily for easier storage in Redis.
+    """
+
+    items: tuple[SegmentUser, ...]

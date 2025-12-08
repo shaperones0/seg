@@ -1,11 +1,11 @@
 """Initial migration.
 
 Creates the tables:
+- segments
 - users
-- login_history
-- revoked_*
+- segment_user
 
-Also set up indexes where needed.
+Sets up indexes where needed.
 """
 
 from logging import getLogger
@@ -19,16 +19,16 @@ class Migration(BaseMigration):
     """Initial migration."""
 
     async def upgrade(self) -> None:
-        """Do the initial migration.
+        """Apply the initial migration.
 
-        Create the tables:
+        Creates the tables:
+        - segments
         - users
-        - login_history
-        - revoked_*
+        - segment_user
 
-        Also set up indexes where needed.
+        Sets up indexes where needed.
         """
-        logger.info("Creating segments, users and segment_user tables")
+        logger.info('Creating segments, users and segment_user tables')
 
         await self.conn.execute("""
         CREATE TABLE segments
@@ -58,11 +58,11 @@ class Migration(BaseMigration):
     async def downgrade(self) -> None:
         """Rollback the initial migration.
 
-        Deletes created tables and indices.
+        Deletes tables: segments, users and segment_user - and their indices.
         """
-        logger.info("Deleting users, revoked_* and login_history tables")
-        await self.conn.execute("DROP TABLE segment_user")
-        await self.conn.execute("DROP TABLE users")
-        await self.conn.execute("DROP TABLE segments")
-        await self.conn.execute("DROP INDEX segment_user_seg")
-        await self.conn.execute("DROP INDEX segment_user_usr")
+        logger.info('Deleting users, revoked_* and login_history tables')
+        await self.conn.execute('DROP TABLE segment_user')
+        await self.conn.execute('DROP TABLE users')
+        await self.conn.execute('DROP TABLE segments')
+        await self.conn.execute('DROP INDEX segment_user_seg')
+        await self.conn.execute('DROP INDEX segment_user_usr')

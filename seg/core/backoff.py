@@ -1,10 +1,11 @@
-from collections.abc import Callable, Awaitable
-from contextlib import AbstractContextManager
-from functools import wraps, lru_cache
+"""Exponential backoff implementation."""
+
+import asyncio
+import math
+from collections.abc import Awaitable, Callable
+from functools import lru_cache, wraps
 from logging import getLogger
 from secrets import SystemRandom
-import math
-import asyncio
 
 from seg.core import error
 from seg.core.type import scast
@@ -37,31 +38,29 @@ def nrandom(u1: float | None = None, u2: float | None = None) -> float:
     if u2 is None:
         u2 = rng.random()
 
-    return math.sqrt(-2 * math.log(u1)) * math.cos(2 * math.pi * u2)
+    return math.sqrt(-2 * math.log(u1)) * math.cos(2 * math.pi * u2)  # noqa: WPS221
 
 
-def backoff[
-        **T_og_params,
-        T_og_ret,
-        T_decorated = Callable[T_og_params, Awaitable[T_og_ret]]
+def backoff[  # noqa: WPS211,WPS234
+    **T_og_params,
+    T_og_ret,
 ](
-        *exceptions: type[BaseException],
-        start_sleep_time: float = 0.1,
-        factor: float = 2.0,
-        max_sleep_time: float = 10.0,
-        jitter: float = 0.1,
-        max_retries: int = 30,
-        service_name: str | None = None,
+    *exceptions: error.ErrType,
+    start_sleep_time: float = 0.1,
+    factor: float = 2.0,
+    max_sleep_time: float = 10.0,
+    jitter: float = 0.1,
+    max_retries: int = 30,
+    service_name: str | None = None,
 ) -> Callable[
-        [T_decorated],
-        T_decorated
+    [Callable[T_og_params, Awaitable[T_og_ret]]],
+    Callable[T_og_params, Awaitable[T_og_ret]],
 ]:
     """Make function retry itself if it raises an exception.
 
-    Decorated function is relaunched with increasing
-    time intervals between launches until it returns
-    True or the maximum number
-    of retries is exceeded, on which an error is thrown.
+    Decorated function is relaunched with increasing time intervals between
+    launches until it runs with no errors thrown, or the maximum number of
+    retries is exceeded, in which case an error is thrown.
 
     :param exceptions: Exceptions to catch.
     :param start_sleep_time: Initial delay after
@@ -79,39 +78,40 @@ def backoff[
     """
 
     def decorator(
-            func: T_decorated
-    ) -> T_decorated:
-        nonlocal service_name
-        if service_name is None:
-            service_name = scast(str, func.__name__)
+        func: Callable[T_og_params, Awaitable[T_og_ret]],
+    ) -> Callable[T_og_params, Awaitable[T_og_ret]]:
+        name = service_name or scast(str, func.__name__)
+
         @wraps(func)
         async def wrapper(
-                *args: T_og_params.args,
-                **kwargs: T_og_params.kwargs
+            *args: T_og_params.args, **kwargs: T_og_params.kwargs
         ) -> T_og_ret:
             delay = start_sleep_time
             retries = 0
             while True:
                 try:
                     return await func(*args, **kwargs)
-                except exceptions as e:
-                    # wahoo
-                    exc = e
-                exc_name = exc.__class__.__name__ if exc else ""
+                except exceptions as ex:
+                    exc = ex
+                exc_name = exc.__class__.__name__ if exc else ''
 
                 # error happened, check if exceed max retries
                 if retries >= max_retries:
                     logger.error(
-                        "%s exceeded max retries (%d).",
-                        service_name, max_retries
+                        '%s exceeded max retries (%d).',
+                        name,
+                        max_retries,
                     )
-                    raise error.BackoffError(service_name)
+                    raise error.BackoffError(name)
                 retries += 1
 
                 # pause between requests
                 logger.warning(
-                    "%s timeout #%d (%s). Retrying in %s",
-                    service_name, retries, exc_name, delay
+                    '%s timeout #%d (%s). Retrying in %s',
+                    name,
+                    retries,
+                    exc_name,
+                    delay,
                 )
                 await asyncio.sleep(delay)
 
@@ -122,28 +122,3 @@ def backoff[
         return wrapper
 
     return decorator
-
-
-class Suppress(AbstractContextManager):
-    """Context manager to suppress specified exceptions"""
-
-    def __init__(self, *exceptions):
-        self._exceptions = exceptions
-        self.raised = False
-
-    def __enter__(self):
-        pass
-
-    def __exit__(self, exctype, excinst, exctb):
-        # Copied from contextlib.supress
-        if exctype is None:
-            return None
-        self.raised = True
-        if issubclass(exctype, self._exceptions):
-            return True
-        if issubclass(exctype, BaseExceptionGroup):
-            match, rest = excinst.split(self._exceptions)
-            if rest is None:
-                return True
-            raise rest
-        return False

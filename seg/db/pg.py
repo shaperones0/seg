@@ -1,28 +1,27 @@
 """Postgres connection management."""
 
-from typing import Final
 from collections.abc import AsyncGenerator
+from typing import Final
 
 import asyncpg
-from asyncpg import Record
 from asyncpg.connection import Connection
 
+from seg.core import error
+from seg.core.backoff import backoff
+
 # see https://github.com/MagicStack/asyncpg/issues/513
-CONNECTION_ERRORS: Final[type(BaseException)] = (
+PG_CONNECTION_ERRORS: Final[error.ErrListType] = (
     OSError,
     asyncpg.CannotConnectNowError,
     asyncpg.ConnectionDoesNotExistError,
 )
 
 # Monkeypatch poor quality stubs
-Connection.__class_getitem__ = classmethod(     # type: ignore[attr-defined]
-    lambda cls, item: "Connection"
+Connection.__class_getitem__ = classmethod(  # type: ignore[attr-defined]
+    lambda cls, item: 'Connection'  # noqa: WPS117, WPS110
 )
 
-from seg.core.backoff import backoff
-
-PostgresConnection = Connection[Record]     # type: ignore[attr-defined]
-# Appreciate errors introduced by following best typing practices
+PostgresConnection = Connection[asyncpg.Record]
 
 pg_conn_info: str | None = None
 
@@ -32,20 +31,19 @@ async def init(postgres_connection_info: str) -> None:
 
     :param postgres_connection_info: Postgres connection URL.
     """
-    global pg_conn_info     # noqa: PLW0603 - Singleton pattern is OK
+    global pg_conn_info  # noqa: PLW0603, WPS420
     pg_conn_info = postgres_connection_info
 
+
 @backoff(
-    *CONNECTION_ERRORS,
-    max_retries=3,
-    service_name="DB Connection Pool"
+    *PG_CONNECTION_ERRORS, max_retries=3, service_name='DB Connection Pool'
 )
-async def _connect(dsn: str) -> Connection:
+async def _connect() -> Connection:
     """Connect to Postgres.
 
-    :param dsn: Postgres DSN.
+    Function does exponential backoff.
+    :return: Connection.
     """
-
     return await asyncpg.connect(pg_conn_info)
 
 
@@ -56,7 +54,7 @@ async def get_pg() -> AsyncGenerator[PostgresConnection]:
 
     :returns: Postgres connection.
     """
-    conn = await _connect(pg_conn_info)
+    conn = await _connect()
     yield conn
     await conn.close()
 
@@ -66,5 +64,5 @@ async def close() -> None:
 
     No further calls to `get_connection()` may be made.
     """
-    global pg_conn_info     # noqa: PLW0603 - Singleton pattern is OK
+    global pg_conn_info  # noqa: PLW0603, WPS420 - Singleton pattern is OK
     pg_conn_info = None

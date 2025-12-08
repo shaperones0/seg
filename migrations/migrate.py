@@ -1,5 +1,6 @@
 """Discover and apply migrations."""
 
+import importlib.util
 import os
 import sys
 from collections.abc import Callable
@@ -8,25 +9,22 @@ from pathlib import Path
 from types import ModuleType
 from typing import Self
 
-from seg.db.pg import PostgresConnection
-
 from migrations.base import BaseMigration
+from seg.db.pg import PostgresConnection
 
 logger = getLogger(__name__)
 
 
 def _dispatch(
-        idx: int | str | None,
-        *,
-        none_value: int,
-        str_lambda: Callable[[str], int]) -> int:
+    idx: int | str | None, *, none_value: int, str_lambda: Callable[[str], int]
+) -> int:
     if idx is None:
         return none_value
     if isinstance(idx, str):
         return str_lambda(idx)
     if isinstance(idx, int):
         return idx
-    raise TypeError(f"Expected str, int or None but got {type(idx)}")
+    raise TypeError(f'Expected str, int or None but got {type(idx)}')
 
 
 def import_from_path(module_name: str, file_path: Path) -> ModuleType:
@@ -36,7 +34,6 @@ def import_from_path(module_name: str, file_path: Path) -> ModuleType:
     :param file_path: Path to the module.
     :return: Imported module instance.
     """
-    import importlib.util
     spec = importlib.util.spec_from_file_location(module_name, file_path)
     module = importlib.util.module_from_spec(spec)
     sys.modules[module_name] = module
@@ -56,9 +53,9 @@ class MigrationDict:
 
     @classmethod
     def from_path(
-            cls,
-            connection: PostgresConnection,
-            base_dir: str | os.PathLike[str] | None = None
+        cls,
+        connection: PostgresConnection,
+        base_dir: str | os.PathLike[str] | None = None,
     ) -> Self:
         """Generate migration dictionary from python files in given directory.
 
@@ -67,27 +64,26 @@ class MigrationDict:
         :return: Migration dictionary.
         """
         if base_dir is None:
-            base_path = Path(__file__).parent.resolve() / "migrations"
+            base_path = Path(__file__).parent.resolve() / 'migrations'
         else:
             base_path = Path(base_dir)
 
         migrations: dict[str, BaseMigration] = {}
         for file in base_path.iterdir():
-            if file.name in ["__init__.py", "__pycache__"]:
+            if file.name in ['__init__.py', '__pycache__']:
                 continue
 
-            if not file.is_file() or file.suffix != ".py":
+            if not file.is_file() or file.suffix != '.py':
                 logger.warning(
-                    "Encountered bad entry in migrations search path: %s",
-                    file
+                    'Encountered bad entry in migrations search path: %s', file
                 )
                 continue
 
             module = import_from_path(file.stem, file)
-            if not hasattr(module, "Migration"):
+            if not hasattr(module, 'Migration'):
                 logger.warning(
-                    "Failed to find migration object in migration file: %s",
-                    file
+                    'Failed to find migration object in migration file: %s',
+                    file,
                 )
                 continue
 
@@ -105,9 +101,9 @@ class MigrationDict:
         done_migrations: list[str] = []
         for migration_name, migration in self.migrations.items():
             if migration_name in applied_migrations:
-                logger.info("migration %s: SKIP", migration_name)
+                logger.info('migration %s: SKIP', migration_name)
                 continue
-            logger.info("migration %s: PENDING", migration_name)
+            logger.info('migration %s: PENDING', migration_name)
             await migration.upgrade()
             done_migrations.append(migration_name)
         return done_migrations
@@ -144,8 +140,8 @@ class MigrationManager:
 
         applied: list[str] = []
         for row in rows:
-            logger.debug("applied: %s at %s", row["name"], row["applied_at"])
-            applied.append(row["name"])
+            logger.debug('applied: %s at %s', row['name'], row['applied_at'])
+            applied.append(row['name'])
         return applied
 
     async def write_applied_migration(self, migration_names: list[str]) -> None:
@@ -157,5 +153,5 @@ class MigrationManager:
             """INSERT INTO migrations (name)
                VALUES ($1)
                ON CONFLICT DO NOTHING""",
-            [[name] for name in migration_names]
+            [[name] for name in migration_names],
         )

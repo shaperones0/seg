@@ -12,7 +12,6 @@ dependencies = [
     'pydantic>=2.12.5',
     'pydantic-settings>=2.12.0',
     'python-dotenv>=1.2.1',
-    "python-multipart>=0.0.20",
     "redis>=7.1.0",
     "typer>=0.20.0",
     "uvicorn>=0.38.0",
@@ -31,17 +30,17 @@ dev = [
 ]
 
 [project.scripts]
-executive = 'src:main'
+executive = 'seg:app'
 
 [build-system]
 requires = ['hatchling']
 build-backend = 'hatchling.build'
 
 [tool.hatch.build.targets.wheel]
-packages = ['auth']
+packages = ['seg']
 
 [tool.mypy]
-files = ['auth']
+files = ['seg']
 strict = true
 
 [tool.ruff]
@@ -51,8 +50,11 @@ fix = true
 exclude = ['tests']
 
 [tool.ruff.format]
-quote-style = 'single'
+quote-style = "single"
 docstring-code-format = false
+
+[tool.ruff.lint.flake8-quotes]
+inline-quotes = "single"
 
 [tool.ruff.lint]
 select = [
@@ -106,6 +108,7 @@ ignore = [
     'ISC001',   # implicit string concat conflicts with `ruff format`
     'ISC003',   # prefer explicit string concat over implicit concat
     'PLR09',    # own complexity rules provided
+    'PLC0414',  # alias as the og package to maky mypy happy
     'TRY003',   # long exception messages from `tryceratops`
     'D401',     # this rule always does false positives
 
@@ -118,6 +121,28 @@ external = ['WPS', 'DEP']
 
 [tool.flake8]
 # Configure WPS excludes
+allowed-domain-names = [
+    'items',
+    'result'
+]
+ignore = [
+    'WPS201',   # many imports due to strict typing
+    'WPS214',   # too many methods ???
+]
+per-file-ignores = [
+    # allow string literals overuse in endpoints
+    'seg/api/v1/segment.py:WPS226,WPS432',
+    'seg/api/v1/user.py:WPS226,WPS432',
+
+    # I wouldn't call it too much cognitive complexity
+    'seg/core/backoff.py:WPS232,WPS231',
+
+    # Don't report string literal overuse in logging setup
+    'seg/core/log.py:WPS226',
+
+    # FIXME allow string literal overuse
+    'seg/service/*:WPS226'
+]
 
 [tool.deptry.per_rule_ignores]
 DEP002 = [
