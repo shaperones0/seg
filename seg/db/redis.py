@@ -56,7 +56,7 @@ async def _connect(
         decode_responses=True,
         socket_connect_timeout=1,
     )
-    await client.ping()     # type: ignore[misc]
+    await client.ping()  # type: ignore[misc]
     await client.aclose()
 
     return Redis(
