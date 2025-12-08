@@ -24,11 +24,11 @@ async def view(
         int,
         Query(
             title='Page number',
-            description='Page number [0 - 10_000)',
+            description='Page number [0 - 10 000)',
             lt=10_000,
             ge=0,
         ),
-    ],
+    ] = 0,
     pgl: Annotated[
         int,
         Query(
@@ -37,7 +37,7 @@ async def view(
             le=1000,
             ge=1,
         ),
-    ],
+    ] = 10,
 ) -> list[schema.UserView]:
     """List tracked users."""
     users = await user.user_view(
