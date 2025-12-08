@@ -209,14 +209,29 @@ class SegmentService:
         :param segments_ids: IDs of segments to delete.
         :raises BackoffError: Failed to establish connection with Postgres.
         """
-        await self.db.execute(
-            """DELETE FROM segments
-            WHERE
-                name = any($1::text[]) OR
-                id = any($2::uuid[])""",
-            segments_names,
-            segments_ids,
-        )
+        if segments_names and segments_ids:
+            await self.db.execute(
+                """DELETE FROM segments
+                WHERE
+                    name = any($1::text[]) OR
+                    id = any($2::uuid[])""",
+                segments_names,
+                segments_ids,
+            )
+        elif segments_names:
+            await self.db.execute(
+                """DELETE
+                   FROM segments
+                   WHERE name = any ($1::text[])""",
+                segments_names,
+            )
+        elif segments_ids:
+            await self.db.execute(
+                """DELETE
+                   FROM segments
+                   WHERE id = any ($1::uuid[])""",
+                segments_ids,
+            )
 
     @backoff(
         *PG_CONNECTION_ERRORS,
@@ -258,7 +273,7 @@ class SegmentService:
         :return: Found value.
         :raises BackoffError: Failed to establish connection with Redis.
         """
-        return await self._redis_get(key)
+        return await self.redis.get(key)
 
     @backoff(
         *REDIS_CONNECTION_ERRORS,

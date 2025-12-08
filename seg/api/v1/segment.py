@@ -121,28 +121,29 @@ async def delete(
         service_segment.SegmentService, Depends(service_segment.get_service)
     ],
     names: Annotated[
-        list[str] | None,
+        list[schema.InputSegmentName],
         Body(
+            default_factory=list,
             title='Names of segments to delete (optional)',
             description='Names of segments to delete',
             min_length=1,
             max_length=1000,
-            regex=PATTERN_SEG_NAME,
         ),
-    ] = None,
+    ],
     ids: Annotated[
-        list[UUID] | None,
+        list[UUID],
         Body(
+            default_factory=list,
             title='IDs of segments to delete (optional)',
             description='IDs of segments to delete',
             max_length=1000,
         ),
-    ] = None,
+    ],
 ) -> None:
     """Delete segments."""
     await segment.segments_delete(
-        segments_names=names or [],
-        segments_ids=ids or [],
+        segments_names=[item.name for item in names],
+        segments_ids=ids,
     )
 
 
