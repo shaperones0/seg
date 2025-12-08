@@ -2,7 +2,7 @@
 
 from collections.abc import Iterable, Mapping, Sequence
 from datetime import timedelta
-from typing import Annotated, Final
+from typing import Annotated, Final, cast
 from uuid import UUID
 
 from asyncpg import UniqueViolationError
@@ -273,7 +273,7 @@ class SegmentService:
         :return: Found value.
         :raises BackoffError: Failed to establish connection with Redis.
         """
-        return await self.redis.get(key)
+        return cast(str, await self.redis.get(key))
 
     @backoff(
         *REDIS_CONNECTION_ERRORS,
