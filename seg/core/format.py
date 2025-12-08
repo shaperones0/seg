@@ -29,14 +29,14 @@ def responses(
                 chain(
                     [
                         dedent(description),
-                        'Errors:',
                     ],
                     (
                         f'- ``{err.__name__}`` - {errors[err] or err.__doc__}'  # noqa: WPS237
                         for err in errors_sieved[code]
                     ),
                 )
-            )
+            ),
+            'model': error.ErrInfo,
         }
         for code, description in descriptions.items()
     }

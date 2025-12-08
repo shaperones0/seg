@@ -4,9 +4,10 @@ import textwrap as tw
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Body, Depends, Query
+from fastapi import APIRouter, Body, Depends, Query, status
 
 from seg.api.v1 import schema
+from seg.core import error
 from seg.core import format as fmt
 from seg.core.config import PATTERN_SEG_NAME
 from seg.service import segment as service_segment
@@ -17,8 +18,18 @@ router = APIRouter()
 @router.get(
     '/',
     summary='List all available segments',
-    responses=fmt.responses(errors={}, descriptions={}),
-)
+    responses=fmt.responses(
+        errors={
+            error.BackoffError:
+                'A service failed to respond after maximum number of retries.',
+        },
+        descriptions={
+            status.HTTP_503_SERVICE_UNAVAILABLE:
+                'Internal services are unavailable',
+        },
+    ),
+
+)  # fmt: skip
 async def view(
     segment: Annotated[
         service_segment.SegmentService, Depends(service_segment.get_service)
@@ -81,8 +92,21 @@ async def view(
 @router.post(
     '/',
     summary='Create a new segment',
-    responses=fmt.responses(errors={}, descriptions={}),
-)
+    responses=fmt.responses(
+        errors={
+            error.BackoffError:
+                'A service failed to respond after maximum number of retries.',
+            error.UniqueError:
+                'One or more names are already occupied.'
+        },
+        descriptions={
+            status.HTTP_503_SERVICE_UNAVAILABLE:
+                'Internal services are unavailable',
+            status.HTTP_400_BAD_REQUEST:
+                'Generic bad request',
+        },
+    ),
+)  # fmt: skip
 async def create(
     segment: Annotated[
         service_segment.SegmentService, Depends(service_segment.get_service)
@@ -114,8 +138,17 @@ async def create(
 @router.delete(
     '/',
     summary='Delete segments',
-    responses=fmt.responses(errors={}, descriptions={}),
-)
+    responses=fmt.responses(
+        errors={
+            error.BackoffError:
+                'A service failed to respond after maximum number of retries.',
+        },
+        descriptions={
+            status.HTTP_503_SERVICE_UNAVAILABLE:
+                'Internal services are unavailable',
+        },
+    ),
+)  # fmt: skip
 async def delete(
     segment: Annotated[
         service_segment.SegmentService, Depends(service_segment.get_service)
@@ -150,8 +183,21 @@ async def delete(
 @router.put(
     '/',
     summary='Update segments',
-    responses=fmt.responses(errors={}, descriptions={}),
-)
+    responses=fmt.responses(
+        errors={
+            error.BackoffError:
+                'A service failed to respond after maximum number of retries.',
+            error.UniqueError:
+                'One or more names are already occupied.'
+        },
+        descriptions={
+            status.HTTP_503_SERVICE_UNAVAILABLE:
+                'Internal services are unavailable',
+            status.HTTP_400_BAD_REQUEST:
+                'Generic bad request',
+        },
+    ),
+)  # fmt: skip
 async def update(
     segment: Annotated[
         service_segment.SegmentService, Depends(service_segment.get_service)

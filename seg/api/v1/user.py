@@ -2,9 +2,10 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Body, Depends, Query
+from fastapi import APIRouter, Body, Depends, Query, status
 
 from seg.api.v1 import schema
+from seg.core import error
 from seg.core import format as fmt
 from seg.service import user as service_user
 
@@ -14,8 +15,17 @@ router = APIRouter()
 @router.get(
     '/',
     summary='List tracked users',
-    responses=fmt.responses(errors={}, descriptions={}),
-)
+    responses=fmt.responses(
+        errors={
+            error.BackoffError:
+                'A service failed to respond after maximum number of retries.',
+        },
+        descriptions={
+            status.HTTP_503_SERVICE_UNAVAILABLE:
+                'Internal services are unavailable',
+        },
+    ),
+)  # fmt: skip
 async def view(
     user: Annotated[
         service_user.UserService, Depends(service_user.get_service)
@@ -51,8 +61,17 @@ async def view(
 @router.post(
     '/',
     summary='Register new users',
-    responses=fmt.responses(errors={}, descriptions={}),
-)
+    responses=fmt.responses(
+        errors={
+            error.BackoffError:
+                'A service failed to respond after maximum number of retries.',
+        },
+        descriptions={
+            status.HTTP_503_SERVICE_UNAVAILABLE:
+                'Internal services are unavailable',
+        },
+    ),
+)  # fmt: skip
 async def create(
     user: Annotated[
         service_user.UserService, Depends(service_user.get_service)
@@ -74,8 +93,17 @@ async def create(
 @router.delete(
     '/',
     summary='Delete users',
-    responses=fmt.responses(errors={}, descriptions={}),
-)
+    responses=fmt.responses(
+        errors={
+            error.BackoffError:
+                'A service failed to respond after maximum number of retries.',
+        },
+        descriptions={
+            status.HTTP_503_SERVICE_UNAVAILABLE:
+                'Internal services are unavailable',
+        },
+    ),
+)  # fmt: skip
 async def delete(
     user: Annotated[
         service_user.UserService, Depends(service_user.get_service)
@@ -96,8 +124,21 @@ async def delete(
 @router.put(
     '/',
     summary='Update users',
-    responses=fmt.responses(errors={}, descriptions={}),
-)
+    responses=fmt.responses(
+        errors={
+            error.BackoffError:
+                'A service failed to respond after maximum number of retries.',
+            error.UniqueError:
+                'One or more IDs are already occupied.'
+        },
+        descriptions={
+            status.HTTP_503_SERVICE_UNAVAILABLE:
+                'Internal services are unavailable',
+            status.HTTP_400_BAD_REQUEST:
+                'Generic bad request',
+        },
+    ),
+)  # fmt: skip
 async def update(
     user: Annotated[
         service_user.UserService, Depends(service_user.get_service)
