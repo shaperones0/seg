@@ -139,6 +139,9 @@ per-file-ignores = [
     # I wouldn't call it too much cognitive complexity
     # Too deep nesting kind of necessary for decorators
     'seg/core/backoff.py:WPS232,WPS231,WPS220',
+
+    # Migrations have specific naming pattern
+    'seg/migrations/migrations/*:WPS102'
 ]
 
 [tool.deptry.per_rule_ignores]

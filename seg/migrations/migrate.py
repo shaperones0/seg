@@ -1,22 +1,29 @@
 """Discover and apply migrations."""
 
-import importlib.util
+import asyncio
 import os
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, Coroutine
+from importlib import abc as importlib_abc
+from importlib import machinery as importlib_machinery
+from importlib import util as importlib_util
 from logging import getLogger
 from pathlib import Path
 from types import ModuleType
-from typing import Self
+from typing import Any, Self
 
-from migrations.base import BaseMigration
+from seg.core.type import scast
 from seg.db.pg import PostgresConnection
+from seg.migrations.base import BaseMigration
 
 logger = getLogger(__name__)
 
 
 def _dispatch(
-    idx: int | str | None, *, none_value: int, str_lambda: Callable[[str], int]
+    idx: int | str | None,
+    *,
+    none_value: int,
+    str_lambda: Callable[[str], int],
 ) -> int:
     if idx is None:
         return none_value
@@ -34,10 +41,13 @@ def import_from_path(module_name: str, file_path: Path) -> ModuleType:
     :param file_path: Path to the module.
     :return: Imported module instance.
     """
-    spec = importlib.util.spec_from_file_location(module_name, file_path)
-    module = importlib.util.module_from_spec(spec)
+    spec = scast(
+        importlib_machinery.ModuleSpec,
+        importlib_util.spec_from_file_location(module_name, file_path),
+    )
+    module = importlib_util.module_from_spec(spec)
     sys.modules[module_name] = module
-    spec.loader.exec_module(module)
+    scast(importlib_abc.Loader, spec.loader).exec_module(module)
     return module
 
 
@@ -52,7 +62,7 @@ class MigrationDict:
         self.migrations = migrations
 
     @classmethod
-    def from_path(
+    def from_path(  # noqa: WPS231
         cls,
         connection: PostgresConnection,
         base_dir: str | os.PathLike[str] | None = None,
@@ -69,7 +79,7 @@ class MigrationDict:
             base_path = Path(base_dir)
 
         migrations: dict[str, BaseMigration] = {}
-        for file in base_path.iterdir():
+        for file in base_path.iterdir():  # noqa: WPS110
             if file.name in ['__init__.py', '__pycache__']:
                 continue
 
@@ -98,15 +108,18 @@ class MigrationDict:
         :param applied_migrations: Migrations assumed to be applied.
         :return: List of applied migrations.
         """
-        done_migrations: list[str] = []
+        migrations_pend: list[Coroutine[Any, Any, None]] = []
+        migrations_done: list[str] = []
         for migration_name, migration in self.migrations.items():
             if migration_name in applied_migrations:
                 logger.info('migration %s: SKIP', migration_name)
                 continue
             logger.info('migration %s: PENDING', migration_name)
-            await migration.upgrade()
-            done_migrations.append(migration_name)
-        return done_migrations
+            migrations_done.append(migration_name)
+            migrations_pend.append(migration.upgrade())
+
+        await asyncio.gather(*migrations_pend)
+        return migrations_done
 
 
 class MigrationManager:
@@ -121,22 +134,22 @@ class MigrationManager:
 
     async def prepare_table_if_need(self) -> None:
         """Generate migration table if necessary."""
-        await self.connection.execute("""
-            CREATE TABLE IF NOT EXISTS migrations (
+        await self.connection.execute(
+            """CREATE TABLE IF NOT EXISTS migrations (
                 name VARCHAR(255) PRIMARY KEY NOT NULL,
                 applied_at TIMESTAMP with time zone NOT NULL
                     DEFAULT (now() at time zone 'utc')
-            )
-        """)
+            )"""
+        )
 
     async def read_applied_migrations(self) -> list[str]:
         """Return list of applied migrations in the database.
 
         :return: List of applied migration names.
         """
-        rows = await self.connection.fetch("""
-            SELECT name, applied_at FROM migrations
-        """)
+        rows = await self.connection.fetch(
+            'SELECT name, applied_at FROM migrations'
+        )
 
         applied: list[str] = []
         for row in rows:

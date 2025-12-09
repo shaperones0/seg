@@ -10,7 +10,7 @@ Sets up indexes where needed.
 
 from logging import getLogger
 
-from migrations.base import BaseMigration
+from seg.migrations.base import BaseMigration
 
 logger = getLogger(__name__)
 
@@ -30,7 +30,8 @@ class Migration(BaseMigration):
         """
         logger.info('Creating segments, users and segment_user tables')
 
-        await self.conn.execute("""
+        await self.conn.execute(
+            """
         CREATE TABLE segments
         (
             id       UUID PRIMARY KEY         NOT NULL,
@@ -55,7 +56,8 @@ class Migration(BaseMigration):
         );
         CREATE INDEX segment_user_seg ON segment_user (seg);
         CREATE INDEX segment_user_usr ON segment_user (usr);
-        """)
+        """
+        )
 
     async def downgrade(self) -> None:
         """Rollback the initial migration.

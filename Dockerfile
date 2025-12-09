@@ -34,7 +34,7 @@ COPY --from=ghcr.io/astral-sh/uv:0.6.14 /uv /usr/local/bin/uv
 ENV UV_LINK_MODE=copy \
     UV_COMPILE_BYTECODE=1 \
     UV_PYTHON_DOWNLOADS=never \
-    UV_PYTHON=python3.12 \
+    UV_PYTHON=python3.13 \
     UV_PROJECT_ENVIRONMENT=/app
 
 ### End build prep -- this is where your app Dockerfile should start.
@@ -94,7 +94,7 @@ apt-get install -qyy \
     -o APT::Install-Suggests=false \
     python3.13=3.13.9-1 \
     libpython3.13=3.13.9-1 \
-    curl=8.14.1-2ubuntu1
+    curl=8.17.0-1ubuntu1
 
 apt-get clean
 rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*

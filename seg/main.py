@@ -2,24 +2,25 @@
 
 import asyncio
 import logging
-from collections.abc import AsyncGenerator, Callable
+from collections.abc import AsyncGenerator, Callable, Coroutine
 from contextlib import asynccontextmanager
 from functools import wraps
 from typing import Any
 
 import typer
 
-from migrations.migrate import MigrationDict, MigrationManager
 from seg.core.config import SETTINGS
 from seg.db import pg, redis
-from seg.db.pg import PostgresConnection
+from seg.migrations.migrate import MigrationDict, MigrationManager
 
 app = typer.Typer()
 
 logger = logging.getLogger(__name__)
 
 
-def coro(func: Callable) -> Callable:
+def coro[**T_param, T_ret](
+    func: Callable[T_param, Coroutine[Any, Any, T_ret]],
+) -> Callable[T_param, None]:
     """Make given async function callable from sync code.
 
     It's achieved by wrapping call with asyncio.run, so
@@ -31,14 +32,14 @@ def coro(func: Callable) -> Callable:
     """
 
     @wraps(func)
-    def _wrapper(*args: Any, **kwargs: Any) -> Any:
+    def wrapper(*args: T_param.args, **kwargs: T_param.kwargs) -> None:
         asyncio.run(func(*args, **kwargs))
 
-    return _wrapper
+    return wrapper
 
 
 @asynccontextmanager
-async def init_connection() -> AsyncGenerator[PostgresConnection]:
+async def init_connection() -> AsyncGenerator[pg.PostgresConnection]:
     """Initialize Postgres connection.
 
     Closes the connection when leaving the scope.
@@ -53,7 +54,7 @@ async def init_connection() -> AsyncGenerator[PostgresConnection]:
 
 @app.command()
 @coro
-async def migrate(
+async def migrate(  # noqa: WPS210, WPS213
     fake: list[str] | None = None, *, verbose: bool = False
 ) -> None:
     """Migrate Postgres database."""
@@ -89,7 +90,7 @@ async def migrate(
 
         logger.debug('writing migrations applied now: %s', applied_now)
         await manager.write_applied_migration(applied_now)
-    print('Successfully performed migrations')
+    logger.info('Successfully performed migrations')
 
 
 if __name__ == '__main__':
