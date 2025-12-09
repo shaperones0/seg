@@ -1,8 +1,8 @@
 """Contains BaseSettings model for loading environment settings.
 
 Default values assume local development environment:
-- Redis is open on port 6380,
-- Postgres is open on port 5433.
+- Redis is open on port 6379,
+- Postgres is open on port 5432.
 """
 
 from logging import config as logging_config
