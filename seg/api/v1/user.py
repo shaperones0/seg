@@ -16,16 +16,12 @@ router = APIRouter()
     '/',
     summary='List tracked users',
     responses=fmt.responses(
-        errors={
-            error.BackoffError:
-                'A service failed to respond after maximum number of retries.',
-        },
+        errors={},
         descriptions={
-            status.HTTP_503_SERVICE_UNAVAILABLE:
-                'Internal services are unavailable',
+            status.HTTP_503_SERVICE_UNAVAILABLE: error.MSG_503,
         },
     ),
-)  # fmt: skip
+)
 async def view(
     user: Annotated[
         service_user.UserService, Depends(service_user.get_service)
@@ -62,16 +58,12 @@ async def view(
     '/',
     summary='Register new users',
     responses=fmt.responses(
-        errors={
-            error.BackoffError:
-                'A service failed to respond after maximum number of retries.',
-        },
+        errors={},
         descriptions={
-            status.HTTP_503_SERVICE_UNAVAILABLE:
-                'Internal services are unavailable',
+            status.HTTP_503_SERVICE_UNAVAILABLE: error.MSG_503,
         },
     ),
-)  # fmt: skip
+)
 async def create(
     user: Annotated[
         service_user.UserService, Depends(service_user.get_service)
@@ -94,16 +86,12 @@ async def create(
     '/',
     summary='Delete users',
     responses=fmt.responses(
-        errors={
-            error.BackoffError:
-                'A service failed to respond after maximum number of retries.',
-        },
+        errors={},
         descriptions={
-            status.HTTP_503_SERVICE_UNAVAILABLE:
-                'Internal services are unavailable',
+            status.HTTP_503_SERVICE_UNAVAILABLE: error.MSG_503,
         },
     ),
-)  # fmt: skip
+)
 async def delete(
     user: Annotated[
         service_user.UserService, Depends(service_user.get_service)
@@ -126,16 +114,12 @@ async def delete(
     summary='Update users',
     responses=fmt.responses(
         errors={
-            error.BackoffError:
-                'A service failed to respond after maximum number of retries.',
             error.UniqueError:
                 'One or more IDs are already occupied.'
         },
         descriptions={
-            status.HTTP_503_SERVICE_UNAVAILABLE:
-                'Internal services are unavailable',
-            status.HTTP_400_BAD_REQUEST:
-                'Generic bad request',
+            status.HTTP_503_SERVICE_UNAVAILABLE: error.MSG_503,
+            status.HTTP_400_BAD_REQUEST: 'Generic bad request',
         },
     ),
 )  # fmt: skip

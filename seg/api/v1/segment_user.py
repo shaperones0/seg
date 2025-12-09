@@ -17,16 +17,12 @@ router = APIRouter()
     '/',
     summary='List user-segment relations with filters',
     responses=fmt.responses(
-        errors={
-            error.BackoffError:
-                'A service failed to respond after maximum number of retries.',
-        },
+        errors={},
         descriptions={
-            status.HTTP_503_SERVICE_UNAVAILABLE:
-                'Internal services are unavailable',
+            status.HTTP_503_SERVICE_UNAVAILABLE: error.MSG_503,
         },
     ),
-)  # fmt: skip
+)
 async def view(
     segment_user: Annotated[
         service_segment_user.SegmentUserService,

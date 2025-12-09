@@ -7,13 +7,15 @@ Code 503 is reserved for ``ServiceUnavailable``.
 """
 
 from collections.abc import Sequence
-from typing import ClassVar, Self
+from typing import ClassVar, Final, Self
 
 from fastapi import status
 from pydantic import BaseModel
 
 ErrType = type[BaseException]
 ErrListType = Sequence[ErrType]
+
+MSG_503: Final[str] = 'Internal services failed to respond.'  # noqa: WPS114
 
 
 class RequestError(Exception):
