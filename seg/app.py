@@ -10,11 +10,14 @@ from logging import getLogger
 from typing import NoReturn
 from urllib.parse import urlparse
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.responses import ORJSONResponse
 
 from seg.api.v1 import (
     segment as api_segment,
+)
+from seg.api.v1 import (
+    segment_user as api_segment_user,
 )
 from seg.api.v1 import (
     user as api_user,
@@ -56,13 +59,23 @@ app = FastAPI(
 @app.exception_handler(RequestError)
 def request_error_handler(_: Request, exc: RequestError) -> NoReturn:
     """FastAPI request handler for RequestError."""
-    raise HTTPException(
-        status_code=exc.status_code, detail=ErrInfo.from_err(exc).model_dump()
-    )
+    if (
+        status.HTTP_400_BAD_REQUEST
+        <= exc.status_code
+        < status.HTTP_500_INTERNAL_SERVER_ERROR
+    ):
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail=ErrInfo.from_err(exc).model_dump(),
+        )
+    raise HTTPException(status_code=exc.status_code)
 
 
-app.include_router(api_segment.router, prefix='/api/v1/seg', tags=['segment'])
+app.include_router(api_segment.router, prefix='/api/v1/s', tags=['segment'])
 app.include_router(api_user.router, prefix='/api/v1/u', tags=['user'])
+app.include_router(
+    api_segment_user.router, prefix='/api/v1/su', tags=['segment_user']
+)
 
 
 def main() -> None:

@@ -130,9 +130,10 @@ ignore = [
     'WPS214',   # too many methods ???
 ]
 per-file-ignores = [
-    # allow string literals overuse in endpoints
+    # allow string literals overuse and magic numbers in endpoints
     'seg/api/v1/segment.py:WPS226,WPS432',
     'seg/api/v1/user.py:WPS226,WPS432',
+    'seg/api/v1/segment_user.py:WPS226,WPS432',
 
     # I wouldn't call it too much cognitive complexity
     'seg/core/backoff.py:WPS232,WPS231',

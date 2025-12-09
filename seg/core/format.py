@@ -36,7 +36,7 @@ def responses(
                     ),
                 )
             ),
-            'model': error.ErrInfo,
+            'model': error.ErrInfo if 400 <= code < 500 else None,  # noqa: PLR2004, WPS432
         }
         for code, description in descriptions.items()
     }

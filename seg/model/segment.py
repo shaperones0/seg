@@ -63,6 +63,15 @@ class SegmentUser(BaseModel):
     user: int
 
 
+class SegmentUserList(BaseModel):
+    """Collection of segment-user relations.
+
+    Used primarily for easier storage in Redis.
+    """
+
+    items: tuple[SegmentUser, ...]
+
+
 class SegmentUsers(BaseModel):
     """Collection of segment-to-user relations.
 

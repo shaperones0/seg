@@ -72,6 +72,8 @@ async def view(
     Supports pagination using params `pgi` (page index) and `pgl` (page length).
     Optionally, add `name` to search for specific name in the database.
 
+    The results are cached.
+
     ### Parameters:
     - `pgi`: Page index (from 0 to 10 000);
     - `pgl`: Page length (from 0 to 1000);

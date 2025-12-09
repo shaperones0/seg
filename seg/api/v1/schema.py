@@ -50,3 +50,10 @@ class InputUserUpdate(BaseModel):
 
     id: int
     new_id: int
+
+
+class SegmentUserView(BaseModel):
+    """Segment-user relation object."""
+
+    user_id: int
+    segment_id: UUID

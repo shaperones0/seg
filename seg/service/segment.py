@@ -48,6 +48,8 @@ class SegmentService:
 
         Raises error if any name already exists in the database,
         aborting creation.
+
+        Resets the cache.
         :param segments_names: Names of segments to create.
         :return: Created segments.
         :raises BackoffError: Failed to connect to Postgres or Redis.
@@ -64,6 +66,8 @@ class SegmentService:
         """List existing segments.
 
         Comes with pagination and optional filtering.
+
+        Results are cached for 5 minutes, or until any segment is changed.
         :param limit: How many segments to return.
         :param offset: How many segments to skip.
         :param name: Set to search for a segment with specific name.
@@ -95,6 +99,7 @@ class SegmentService:
     ) -> None:
         """Delete segments by their names or IDs.
 
+        Resets the cache.
         :param segments_names: Names of segments to delete.
         :param segments_ids: IDs of segments to delete.
         :raises BackoffError: Failed to connect to Postgres or Redis.
@@ -112,6 +117,7 @@ class SegmentService:
     ) -> None:
         """Update segments names by their IDs.
 
+        Resets the cache.
         :param ids_names: Mapping of IDs to new names.
         :raises BackoffError: Failed to connect to Postgres or Redis.
         :raises UniqueError: One of the names already exists in the database.
@@ -156,6 +162,10 @@ class SegmentService:
                 limit,
                 offset,
             )
+
+        # Intentionally leave this as **, to make sure models are updated
+        #  when database updates - pydantic will point which fields
+        #  aren't updated in the model
         return ModelSegmentList(
             items=tuple(ModelSegment(**row) for row in db_result)
         )
@@ -222,14 +232,14 @@ class SegmentService:
             await self.db.execute(
                 """DELETE
                    FROM segments
-                   WHERE name = any ($1::text[])""",
+                   WHERE name = any($1::text[])""",
                 segments_names,
             )
         elif segments_ids:
             await self.db.execute(
                 """DELETE
                    FROM segments
-                   WHERE id = any ($1::uuid[])""",
+                   WHERE id = any($1::uuid[])""",
                 segments_ids,
             )
 

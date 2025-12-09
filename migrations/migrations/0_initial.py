@@ -49,7 +49,8 @@ class Migration(BaseMigration):
         (
             seg UUID   NOT NULL REFERENCES segments (id)
                 ON DELETE CASCADE,
-            usr BIGINT NOT NULL REFERENCES users (id)
+            usr BIGINT NOT NULL REFERENCES users (id),
+            UNIQUE (seg, usr)
         );
         CREATE INDEX segment_user_seg ON segment_user (seg);
         CREATE INDEX segment_user_usr ON segment_user (usr);
