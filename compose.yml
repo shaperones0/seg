@@ -9,7 +9,7 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     volumes:
       - db_data:/var/lib/postgresql
-      - ./_ttemp/backup.sql:/docker-entrypoint-initdb.d/init.sql
+      # - ./_ttemp/backup.sql:/docker-entrypoint-initdb.d/init.sql
     ports:
       - '5432:5432'
     healthcheck:
