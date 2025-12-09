@@ -78,7 +78,7 @@ async def create(
         ),
     ],
 ) -> None:
-    """Create a new segment."""
+    """Create new users."""
     await user.user_add(ids)
 
 
@@ -105,7 +105,7 @@ async def delete(
         ),
     ],
 ) -> None:
-    """Delete segments."""
+    """Delete users."""
     await user.user_delete(users_ids=ids)
 
 
@@ -135,5 +135,5 @@ async def update(
         ),
     ],
 ) -> None:
-    """Update segments."""
+    """Update users."""
     await user.user_update(ids_newids={upd.id: upd.new_id for upd in updates})
