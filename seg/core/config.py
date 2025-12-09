@@ -53,3 +53,4 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # global patterns
 PATTERN_SEG_NAME: Final[str] = r'^[a-zA-Z0-9а-яёА-ЯЁ_]*$'  # noqa: RUF001
+PATTERN_SEG_PATTERN: Final[str] = r'^[a-zA-Z0-9а-яёА-ЯЁ_|*+?{},()[\]]*$'  # noqa: RUF001

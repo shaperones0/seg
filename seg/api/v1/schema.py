@@ -8,11 +8,24 @@ from pydantic import BaseModel, Field
 from seg.core.config import PATTERN_SEG_NAME
 
 
-class SegmentView(BaseModel):
+class ViewSegment(BaseModel):
     """Lite version of segment object."""
 
     id: UUID
     name: str
+
+
+class ViewUser(BaseModel):
+    """Lite version of user object."""
+
+    id: int
+
+
+class SegmentUser(BaseModel):
+    """Segment-user relation object."""
+
+    user_id: int
+    segment_id: UUID
 
 
 class InputSegmentName(BaseModel):
@@ -39,21 +52,8 @@ class InputSegmentUpdate(BaseModel):
     new_name: str
 
 
-class UserView(BaseModel):
-    """Lite version of user object."""
-
-    id: int
-
-
 class InputUserUpdate(BaseModel):
     """Key-value pair to give a user new id."""
 
     id: int
     new_id: int
-
-
-class SegmentUser(BaseModel):
-    """Segment-user relation object."""
-
-    user_id: int
-    segment_id: UUID

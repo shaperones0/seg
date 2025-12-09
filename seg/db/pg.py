@@ -20,8 +20,10 @@ PG_CONNECTION_ERRORS: Final[error.ErrListType] = (
 Connection.__class_getitem__ = classmethod(  # type: ignore[attr-defined]
     lambda cls, item: 'Connection'  # noqa: WPS117, WPS110
 )
-
 PostgresConnection = Connection[asyncpg.Record]
+
+UniqueError = asyncpg.UniqueViolationError
+
 backoff = Backoff('Postgres Connection Pool')
 pg_conn_info: str | None = None
 

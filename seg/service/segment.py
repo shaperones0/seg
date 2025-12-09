@@ -1,47 +1,33 @@
 """Segments management service."""
 
 from collections.abc import Iterable, Mapping, Sequence
-from datetime import timedelta
-from typing import Annotated, Final, cast
+from typing import Annotated
 from uuid import UUID
 
-from asyncpg import UniqueViolationError
 from fastapi import Depends
 
-from seg.core import error
-from seg.core.backoff import Backoff
-from seg.db.pg import (
-    PG_CONNECTION_ERRORS,
-    PostgresConnection,
-    get_pg,
-)
-from seg.db.redis import REDIS_CONNECTION_ERRORS, Redis, get_redis
-from seg.model.segment import (
-    Segment as ModelSegment,
-)
-from seg.model.segment import (
-    Segments as ModelSegmentList,
-)
-
-REDIS_TTL: Final[timedelta] = timedelta(minutes=5)
-backoff: Backoff = Backoff('Segment service')
+from seg.model import model as mdl
+from seg.service import cache as svc_cache
+from seg.service import db as svc_db
 
 
 class SegmentService:
     """Segment management service."""
 
-    def __init__(self, db: PostgresConnection, redis: Redis) -> None:
+    def __init__(
+        self, db: svc_db.DbService, redis: svc_cache.CacheService
+    ) -> None:
         """Initialize segment management service.
 
-        :param db: Postgres database connection.
-        :param redis: Redis database connection.
+        :param db: Database service.
+        :param redis: Cache service
         """
         self.db = db
-        self.redis = redis
+        self.cache = redis
 
     async def segment_create(
         self, segments_names: Iterable[str]
-    ) -> tuple[ModelSegment, ...]:
+    ) -> tuple[mdl.Segment, ...]:
         """Create new segments by names.
 
         Creates new segments with names given in the array.
@@ -53,46 +39,54 @@ class SegmentService:
         Resets the cache.
         :param segments_names: Names of segments to create.
         :return: Created segments.
-        :raises BackoffError: Failed to connect to Postgres or Redis.
         :raises UniqueError: One or several names already exist.
         """
-        segments = tuple(ModelSegment.create(name) for name in segments_names)
-        await self._sql_segment_insert(segments)
-        await self._redis_clear()
+        segments = tuple(mdl.Segment.create(name) for name in segments_names)
+        await self.db.segment_insert(segments)
+        await self.cache.clear()
         return segments
 
-    async def segments_view(
-        self, *, limit: int, offset: int, name: str
-    ) -> ModelSegmentList:
+    async def segment_read(
+        self, *, limit: int, offset: int, name: str, user_id: int | None
+    ) -> tuple[mdl.Segment, ...]:
         """List existing segments.
 
         Comes with pagination and optional filtering.
 
-        Results are cached for 5 minutes, or until any segment is changed.
+        Results are cached.
         :param limit: How many segments to return.
         :param offset: How many segments to skip.
         :param name: Set to search for a segment with specific name.
+        :param user_id: Set to only display segments of given user.
         :return: List of segments found.
-        :raises BackoffError: Failed to connect to Postgres or Redis.
         """
-        result: ModelSegmentList
-        redis_key = f'segv:{limit}:{offset}:{name}'
-        redis_str: str | None = await self._redis_get(redis_key)
+        redis_key = f's:{limit}:{offset}:{name}:{user_id}'
+        redis_str = await self.cache.get(redis_key)
         if redis_str is None:
-            result = await self._sql_segment_select(
+            result = await self.db.segment_select(
                 limit=limit,
                 offset=offset,
                 name=name,
+                user_id=user_id,
             )
-            await self._redis_set(
-                redis_key, result.model_dump_json(), REDIS_TTL
-            )
+            redis_str = result.model_dump_json()
+            await self.cache.set(redis_key, redis_str)
         else:
-            result = ModelSegmentList.model_validate_json(redis_str)
+            result = mdl.List[mdl.Segment].model_validate_json(redis_str)
 
-        return result
+        return result.it
 
-    async def segments_delete(
+    async def segment_update(self, ids_names: Mapping[UUID, str]) -> None:
+        """Update segments names by their IDs.
+
+        Resets the cache.
+        :param ids_names: Mapping of IDs to new names.
+        :raises UniqueError: One of the names already exists in the database.
+        """
+        await self.db.segment_update(ids_names)
+        await self.cache.clear()
+
+    async def segment_delete(
         self,
         *,
         segments_names: Sequence[str],
@@ -103,218 +97,22 @@ class SegmentService:
         Resets the cache.
         :param segments_names: Names of segments to delete.
         :param segments_ids: IDs of segments to delete.
-        :raises BackoffError: Failed to connect to Postgres or Redis.
         """
-        await self._sql_segment_delete(
+        await self.db.segment_delete(
             segments_names=segments_names,
             segments_ids=segments_ids,
         )
-        await self._redis_clear()
-
-    async def segments_update(
-        self,
-        *,
-        ids_names: Mapping[UUID, str],
-    ) -> None:
-        """Update segments names by their IDs.
-
-        Resets the cache.
-        :param ids_names: Mapping of IDs to new names.
-        :raises BackoffError: Failed to connect to Postgres or Redis.
-        :raises UniqueError: One of the names already exists in the database.
-        """
-        await self._sql_segment_update(
-            ids_names=ids_names,
-        )
-        await self._redis_clear()
-
-    @backoff(
-        *PG_CONNECTION_ERRORS,
-        max_retries=3,
-    )
-    async def _sql_segment_select(
-        self, *, limit: int, offset: int, name: str
-    ) -> ModelSegmentList:
-        """List existing segments.
-
-        Comes with pagination and optional filtering.
-        :param limit: How many segments to return.
-        :param offset: How many segments to skip.
-        :param name: Set to search for a segment with specific name.
-        :return: List of segments found.
-        :raises BackoffError: Failed to establish connection with Postgres.
-        """
-        if name:
-            db_result = await self.db.fetch(
-                """SELECT * FROM segments
-                WHERE name = $1
-                ORDER BY id DESC
-                LIMIT $2 OFFSET $3""",
-                name,
-                limit,
-                offset,
-            )
-        else:
-            db_result = await self.db.fetch(
-                """SELECT * FROM segments
-                ORDER BY id DESC
-                LIMIT $1 OFFSET $2""",
-                limit,
-                offset,
-            )
-
-        # Intentionally leave this as **, to make sure models are updated
-        #  when database updates - pydantic will point which fields
-        #  aren't updated in the model
-        return ModelSegmentList(
-            items=tuple(ModelSegment(**row) for row in db_result)
-        )
-
-    @backoff(
-        *PG_CONNECTION_ERRORS,
-        max_retries=3,
-    )
-    async def _sql_segment_insert(
-        self, segments: Sequence[ModelSegment]
-    ) -> None:
-        """Create new segments.
-
-        :param segments: New segment objects to create.
-        :raises BackoffError: Failed to establish connection with Postgres.
-        :raises UniqueError: One or several names already exist.
-        """
-        try:
-            async with self.db.transaction():
-                await self.db.executemany(
-                    """INSERT INTO segments (id, name, created, modified)
-                    VALUES ($1, $2, $3, $4)""",
-                    (
-                        (
-                            segment.id,
-                            segment.name,
-                            segment.created,
-                            segment.modified,
-                        )
-                        for segment in segments
-                    ),
-                )
-        except UniqueViolationError as exc:
-            raise error.UniqueError from exc
-
-    @backoff(
-        *PG_CONNECTION_ERRORS,
-        max_retries=3,
-    )
-    async def _sql_segment_delete(
-        self,
-        *,
-        segments_names: Sequence[str],
-        segments_ids: Sequence[UUID],
-    ) -> None:
-        """Delete segments by their names or IDs.
-
-        :param segments_names: Names of segments to delete.
-        :param segments_ids: IDs of segments to delete.
-        :raises BackoffError: Failed to establish connection with Postgres.
-        """
-        if segments_names and segments_ids:
-            await self.db.execute(
-                """DELETE FROM segments
-                WHERE
-                    name = any($1::text[]) OR
-                    id = any($2::uuid[])""",
-                segments_names,
-                segments_ids,
-            )
-        elif segments_names:
-            await self.db.execute(
-                """DELETE
-                   FROM segments
-                   WHERE name = any($1::text[])""",
-                segments_names,
-            )
-        elif segments_ids:
-            await self.db.execute(
-                """DELETE
-                   FROM segments
-                   WHERE id = any($1::uuid[])""",
-                segments_ids,
-            )
-
-    @backoff(
-        *PG_CONNECTION_ERRORS,
-        max_retries=3,
-    )
-    async def _sql_segment_update(
-        self,
-        *,
-        ids_names: Mapping[UUID, str],
-    ) -> None:
-        """Update segments names by their IDs.
-
-        :param ids_names: Mapping of IDs to new names.
-        :raises BackoffError: Failed to establish connection with Postgres.
-        :raises UniqueError: One of the names already exists in the database.
-        """
-        try:
-            async with self.db.transaction():
-                await self.db.executemany(
-                    """UPDATE segments
-                    SET name = $2,
-                        modified = (now() at time zone 'UTC')
-                    WHERE id = $1""",
-                    ids_names.items(),
-                )
-        except UniqueViolationError as exc:
-            raise error.UniqueError from exc
-
-    @backoff(
-        *REDIS_CONNECTION_ERRORS,
-        max_retries=3,
-    )
-    async def _redis_get(self, key: str) -> str | None:
-        """Fetch value of a given Redis key.
-
-        :param key: Key to look for.
-        :return: Found value.
-        :raises BackoffError: Failed to establish connection with Redis.
-        """
-        return cast(str, await self.redis.get(key))
-
-    @backoff(
-        *REDIS_CONNECTION_ERRORS,
-        max_retries=3,
-    )
-    async def _redis_set(self, key: str, value: str, expire: timedelta) -> None:  # noqa: WPS110
-        """Creates/modifies new value in Redis with provided expiration time.
-
-        :param key: Key to create / modify.
-        :param value: Value to set to given key.
-        :param expire: Time until the key is expired.
-        :raises BackoffError: Failed to establish connection with Redis.
-        """
-        await self.redis.set(key, value, ex=expire)
-
-    @backoff(
-        *REDIS_CONNECTION_ERRORS,
-        max_retries=3,
-    )
-    async def _redis_clear(self) -> None:
-        """Clears Redis database.
-
-        :raises BackoffError: Failed to establish connection with Redis.
-        """
-        await self.redis.flushall()
+        await self.cache.clear()
 
 
 def get_service(
-    db: Annotated[PostgresConnection, Depends(get_pg)],
-    redis: Annotated[Redis, Depends(get_redis)],
+    db: Annotated[svc_db.DbService, Depends(svc_db.get_service)],
+    cache: Annotated[svc_cache.CacheService, Depends(svc_cache.get_service)],
 ) -> SegmentService:
     """Segment service as a FastAPI dependency.
 
-    :param db: Postgres database dependency.
-    :param redis: Redis database dependency.
+    :param db: Database service dependency.
+    :param cache: Cache service dependency.
     :return: ``SegmentService`` instance.
     """
-    return SegmentService(db, redis)
+    return SegmentService(db, cache)

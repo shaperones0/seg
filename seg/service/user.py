@@ -1,195 +1,95 @@
-"""Segments management service."""
+"""User management service."""
 
 from collections.abc import Iterable, Mapping, Sequence
-from datetime import timedelta
-from typing import Annotated, Final
+from typing import Annotated
+from uuid import UUID
 
-from asyncpg import UniqueViolationError
 from fastapi import Depends
 
-from seg.core import error
-from seg.core.backoff import Backoff
-from seg.db.pg import (
-    PG_CONNECTION_ERRORS,
-    PostgresConnection,
-    get_pg,
-)
-from seg.model.segment import (
-    User as ModelUser,
-)
-from seg.model.segment import (
-    Users as ModelUserList,
-)
-
-REDIS_TTL: Final[timedelta] = timedelta(minutes=5)
-backoff: Backoff = Backoff('User service')
+from seg.model import model as mdl
+from seg.service import cache as svc_cache
+from seg.service import db as svc_db
 
 
 class UserService:
-    """Segment management service."""
+    """User management service."""
 
-    def __init__(self, db: PostgresConnection) -> None:
-        """Initialize user service.
+    def __init__(
+        self, db: svc_db.DbService, redis: svc_cache.CacheService
+    ) -> None:
+        """Initialize user management service.
 
-        :param db: Postgres database connection.
+        :param db: Database service.
+        :param redis: Cache service
         """
         self.db = db
+        self.cache = redis
 
-    async def user_add(self, users_ids: Iterable[int]) -> tuple[ModelUser, ...]:
+    async def user_add(self, users_ids: Iterable[int]) -> None:
         """Insert user IDs, ignore duplicate IDs.
 
+        Resets the cache.
         :param users_ids: User IDs to insert.
-        :raises BackoffError: Failed to connect to Postgres.
         """
-        users = tuple(ModelUser(id=uid) for uid in users_ids)
-        await self._sql_user_upsert(users)
-        return users
+        await self.db.user_upsert(users_ids)
+        await self.cache.clear()
 
-    async def user_view(
-        self,
-        *,
-        limit: int,
-        offset: int,
-    ) -> ModelUserList:
+    async def user_read(
+        self, *, limit: int, offset: int, segment_id: UUID | None
+    ) -> tuple[int, ...]:
         """List existing user IDs.
 
+        Result is cached.
         :param limit: How many IDs to return.
         :param offset: How many IDs to skip.
+        :param segment_id: Set to list users in this segment.
         :return: List of IDs.
-        :raises BackoffError: Failed to connect to Postgres.
         """
-        return await self._sql_user_select(
-            limit=limit,
-            offset=offset,
-        )
+        redis_key = f'u:{limit}:{offset}:{segment_id}'
+        redis_str = await self.cache.get(redis_key)
+        if redis_str is None:
+            result = await self.db.user_select(
+                limit=limit,
+                offset=offset,
+                segment_id=segment_id,
+            )
+            redis_str = result.model_dump_json()
+            await self.cache.set(redis_key, redis_str)
+        else:
+            result = mdl.List[mdl.User].model_validate_json(redis_str)
 
-    async def user_delete(
-        self,
-        *,
-        users_ids: Sequence[int],
-    ) -> None:
+        return tuple(user.id for user in result.it)
+
+    async def user_delete(self, user_ids: Sequence[int]) -> None:
         """Delete given IDs.
 
-        :param users_ids: IDs to delete.
-        :raises BackoffError: Failed to connect to Postgres.
-        """
-        await self._sql_user_delete(
-            user_ids=users_ids,
-        )
-
-    async def user_update(
-        self,
-        *,
-        ids_newids: Mapping[int, int],
-    ) -> None:
-        """Change user IDs.
-
-        Change given user IDs into new ones.
-        :param ids_newids: Mapping of old IDs to new IDs.
-        :raises BackoffError: Failed to connect to Postgres.
-        :raises UniqueError: One of the new IDs already exists.
-        """
-        await self._sql_user_update(
-            ids_newids=ids_newids,
-        )
-
-    @backoff(
-        *PG_CONNECTION_ERRORS,
-        max_retries=3,
-    )
-    async def _sql_user_select(
-        self,
-        *,
-        limit: int,
-        offset: int,
-    ) -> ModelUserList:
-        """List existing user IDs.
-
-        :param limit: How many IDs to return.
-        :param offset: How many IDs to skip.
-        :return: List of IDs.
-        :raises BackoffError: Failed to connect to Postgres.
-        """
-        db_result = await self.db.fetch(
-            """SELECT * FROM users
-            ORDER BY id DESC
-            LIMIT $1 OFFSET $2""",
-            limit,
-            offset,
-        )
-        return ModelUserList(items=tuple(ModelUser(**row) for row in db_result))
-
-    @backoff(
-        *PG_CONNECTION_ERRORS,
-        max_retries=3,
-    )
-    async def _sql_user_upsert(self, users: Sequence[ModelUser]) -> None:
-        """Insert user IDs, ignore duplicate IDs.
-
-        :param users: Users to insert.
-        :raises BackoffError: Failed to connect to Postgres.
-        """
-        await self.db.executemany(
-            """INSERT INTO users (id)
-            VALUES ($1)
-            ON CONFLICT (id) DO NOTHING""",
-            ((usr.id,) for usr in users),
-        )
-
-    @backoff(
-        *PG_CONNECTION_ERRORS,
-        max_retries=3,
-    )
-    async def _sql_user_delete(
-        self,
-        *,
-        user_ids: Sequence[int],
-    ) -> None:
-        """Delete given IDs.
-
+        Resets the cache.
         :param user_ids: IDs to delete.
-        :raises BackoffError: Failed to connect to Postgres.
         """
-        await self.db.execute(
-            """DELETE FROM users
-            WHERE id = any($1::int[])""",
-            user_ids,
-        )
+        await self.db.user_delete(user_ids)
+        await self.cache.clear()
 
-    @backoff(
-        *PG_CONNECTION_ERRORS,
-        max_retries=3,
-    )
-    async def _sql_user_update(
-        self,
-        *,
-        ids_newids: Mapping[int, int],
-    ) -> None:
+    async def user_update(self, ids_newids: Mapping[int, int]) -> None:
         """Change user IDs.
 
         Change given user IDs into new ones.
+
+        Resets the cache.
         :param ids_newids: Mapping of old IDs to new IDs.
-        :raises BackoffError: Failed to connect to Postgres.
         :raises UniqueError: One of the new IDs already exists.
         """
-        try:
-            async with self.db.transaction():
-                await self.db.executemany(
-                    """UPDATE users
-                    SET id = $2
-                    WHERE id = $1""",
-                    ids_newids.items(),
-                )
-        except UniqueViolationError as exc:
-            raise error.UniqueError from exc
+        await self.db.user_update(ids_newids)
+        await self.cache.clear()
 
 
 def get_service(
-    db: Annotated[PostgresConnection, Depends(get_pg)],
+    db: Annotated[svc_db.DbService, Depends(svc_db.get_service)],
+    cache: Annotated[svc_cache.CacheService, Depends(svc_cache.get_service)],
 ) -> UserService:
     """User service as a FastAPI dependency.
 
-    :param db: Postgres database dependency.
+    :param db: Database service dependency.
+    :param cache: Cache service dependency.
     :return: ``UserService`` instance.
     """
-    return UserService(db)
+    return UserService(db, cache)

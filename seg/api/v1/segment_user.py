@@ -5,11 +5,11 @@ from uuid import UUID
 
 from fastapi import APIRouter, Body, Depends, Query, status
 
-from seg.api.v1.schema import SegmentUser
+from seg.api.v1 import schema
 from seg.core import error
 from seg.core import format as fmt
-from seg.model.segment import SegmentUser as ModelSegmentUser
-from seg.service import segment_user as service_segment_user
+from seg.model import model as mdl
+from seg.service import segment_user as svc_segusr
 
 router = APIRouter()
 
@@ -26,8 +26,8 @@ router = APIRouter()
 )
 async def view(
     segment_user: Annotated[
-        service_segment_user.SegmentUserService,
-        Depends(service_segment_user.get_service),
+        svc_segusr.SegmentUserService,
+        Depends(svc_segusr.get_service),
     ],
     user_ids: Annotated[
         list[int],
@@ -67,7 +67,7 @@ async def view(
             ge=1,
         ),
     ] = 10,
-) -> list[SegmentUser]:
+) -> list[schema.SegmentUser]:
     """## List stored segment-user relations.
 
     Supports optional filtering by user IDs or segment ID.
@@ -87,13 +87,13 @@ async def view(
     - `pgi`: Page index (from 0 to 10 000);
     - `pgl`: Page length (from 0 to 1000).
     """
-    sus = await segment_user.su_view(
+    sus = await segment_user.segusr_read(
         user_ids=user_ids,
         segment_ids=segment_ids,
         offset=pgi * pgl,
         limit=pgl,
     )
-    return [SegmentUser(user_id=su.usr, segment_id=su.seg) for su in sus.items]
+    return [schema.SegmentUser(user_id=su.usr, segment_id=su.seg) for su in sus]
 
 
 @router.post(
@@ -108,11 +108,11 @@ async def view(
 )
 async def create(
     segment_user: Annotated[
-        service_segment_user.SegmentUserService,
-        Depends(service_segment_user.get_service),
+        svc_segusr.SegmentUserService,
+        Depends(svc_segusr.get_service),
     ],
     su: Annotated[
-        list[SegmentUser],
+        list[schema.SegmentUser],
         Body(
             default_factory=list,
             title='Relations to create',
@@ -129,9 +129,9 @@ async def create(
     ### Parameters:
     - `user_ids`: Pairs of user IDs and segment IDs to include.
     """
-    await segment_user.su_create(
+    await segment_user.segusr_create(
         [
-            ModelSegmentUser(seg=seg_user.segment_id, usr=seg_user.user_id)
+            mdl.SegUsr(seg=seg_user.segment_id, usr=seg_user.user_id)
             for seg_user in su
         ]
     )
@@ -149,8 +149,8 @@ async def create(
 )
 async def delete(
     segment_user: Annotated[
-        service_segment_user.SegmentUserService,
-        Depends(service_segment_user.get_service),
+        svc_segusr.SegmentUserService,
+        Depends(svc_segusr.get_service),
     ],
     user_ids: Annotated[
         list[int],
@@ -181,7 +181,7 @@ async def delete(
     - `user_ids`: Pairs of user IDs and segment IDs to include,
     - `segment_ids`: Pairs of segment IDs to include.
     """
-    await segment_user.su_delete(
+    await segment_user.segusr_delete(
         user_ids=user_ids,
         segment_ids=segment_ids,
     )
@@ -199,8 +199,8 @@ async def delete(
 )
 async def mass(
     segment_user: Annotated[
-        service_segment_user.SegmentUserService,
-        Depends(service_segment_user.get_service),
+        svc_segusr.SegmentUserService,
+        Depends(svc_segusr.get_service),
     ],
     ratio: Annotated[
         float,
@@ -248,7 +248,7 @@ async def mass(
     - `segment_ids`: Segment to assign.
     - `subset_segment_id`: Optional filter segment.
     """
-    await segment_user.su_mass(
+    await segment_user.segusr_mass(
         ratio=ratio,
         segment_ids=segment_ids,
         subset_segment_id=subset_segment_id,

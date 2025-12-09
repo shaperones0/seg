@@ -10,14 +10,14 @@ from seg.api.v1 import schema
 from seg.core import error
 from seg.core import format as fmt
 from seg.core.config import PATTERN_SEG_NAME
-from seg.service import segment as service_segment
+from seg.service import segment as svc_segment
 
 router = APIRouter()
 
 
 @router.get(
     '/',
-    summary='List all available segments',
+    summary='List available segments',
     responses=fmt.responses(
         errors={},
         descriptions={
@@ -27,7 +27,7 @@ router = APIRouter()
 )
 async def view(
     segment: Annotated[
-        service_segment.SegmentService, Depends(service_segment.get_service)
+        svc_segment.SegmentService, Depends(svc_segment.get_service)
     ],
     pgi: Annotated[
         int,
@@ -60,7 +60,14 @@ async def view(
             regex=PATTERN_SEG_NAME,
         ),
     ] = None,
-) -> list[schema.SegmentView]:
+    user_id: Annotated[
+        int | None,
+        Query(
+            title='User ID to search for',
+            description='User ID to only show segments of this user',
+        ),
+    ] = None,
+) -> list[schema.ViewSegment]:
     """## List stored segments.
 
     Retrieve a list of segments stored in the database.
@@ -77,13 +84,11 @@ async def view(
     ### Returns:
     List of segments.
     """
-    segments = await segment.segments_view(
-        limit=pgl, offset=pgi * pgl, name=name or ''
+    segments = await segment.segment_read(
+        limit=pgl, offset=pgi * pgl, name=name or '', user_id=user_id
     )
 
-    return [
-        schema.SegmentView(id=seg.id, name=seg.name) for seg in segments.items
-    ]
+    return [schema.ViewSegment(id=seg.id, name=seg.name) for seg in segments]
 
 
 @router.post(
@@ -99,7 +104,7 @@ async def view(
 )
 async def create(
     segment: Annotated[
-        service_segment.SegmentService, Depends(service_segment.get_service)
+        svc_segment.SegmentService, Depends(svc_segment.get_service)
     ],
     names: Annotated[
         list[schema.InputSegmentName],
@@ -110,10 +115,12 @@ async def create(
             max_length=100,
         ),
     ],
-) -> list[schema.SegmentView]:
+) -> list[schema.ViewSegment]:
     """## Create new segments.
 
     Create new segments from names list.
+
+    Resets cache.
 
     ### Parameters:
     - `names`: Names of segments to create.
@@ -122,7 +129,7 @@ async def create(
     List of new segments.
     """
     segments = await segment.segment_create(nm.name for nm in names)
-    return [schema.SegmentView(id=seg.id, name=seg.name) for seg in segments]
+    return [schema.ViewSegment(id=seg.id, name=seg.name) for seg in segments]
 
 
 @router.delete(
@@ -137,13 +144,13 @@ async def create(
 )
 async def delete(
     segment: Annotated[
-        service_segment.SegmentService, Depends(service_segment.get_service)
+        svc_segment.SegmentService, Depends(svc_segment.get_service)
     ],
     names: Annotated[
         list[schema.InputSegmentName],
         Body(
             default_factory=list,
-            title='Names of segments to delete (optional)',
+            title='Names of segments to delete',
             description='Names of segments to delete',
             min_length=1,
             max_length=1000,
@@ -153,14 +160,29 @@ async def delete(
         list[UUID],
         Body(
             default_factory=list,
-            title='IDs of segments to delete (optional)',
+            title='IDs of segments to delete',
             description='IDs of segments to delete',
             max_length=1000,
         ),
     ],
 ) -> None:
-    """Delete segments."""
-    await segment.segments_delete(
+    """## Delete segments.
+
+    Provides mass deletion of segments.
+
+    Specify `names` to delete segments with given names.
+
+    Specify `ids` to delete segments with given IDs.
+
+    Specify both to narrow down the filtering.
+
+    Resets cache.
+
+    ### Parameters:
+    - `names`: Names of segments to delete.
+    - `ids`: IDs of segments to delete.
+    """
+    await segment.segment_delete(
         segments_names=[seg.name for seg in names],
         segments_ids=ids,
     )
@@ -170,7 +192,12 @@ async def delete(
     '/',
     summary='Update segments',
     responses=fmt.responses(
-        errors={error.UniqueError: 'One or more names are already occupied.'},
+        errors={
+            error.UniqueError: tw.dedent(
+                """One or more names are already occupied,
+                or duplicate keys found."""
+            )
+        },
         descriptions={
             status.HTTP_503_SERVICE_UNAVAILABLE: error.MSG_503,
             status.HTTP_400_BAD_REQUEST: 'Generic bad request',
@@ -179,7 +206,7 @@ async def delete(
 )
 async def update(
     segment: Annotated[
-        service_segment.SegmentService, Depends(service_segment.get_service)
+        svc_segment.SegmentService, Depends(svc_segment.get_service)
     ],
     updates: Annotated[
         list[schema.InputSegmentUpdate],
@@ -189,7 +216,14 @@ async def update(
         ),
     ],
 ) -> None:
-    """Update segments."""
-    await segment.segments_update(
-        ids_names={upd.id: upd.new_name for upd in updates}
-    )
+    """## Update segments.
+
+    Resets cache.
+
+    ### Parameters:
+    - `names`: Array of key-value pairs to update segments.
+    """
+    if len({upd.id for upd in updates}) != len(updates):
+        raise error.UniqueError
+
+    await segment.segment_update({upd.id: upd.new_name for upd in updates})

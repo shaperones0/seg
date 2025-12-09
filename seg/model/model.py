@@ -7,6 +7,15 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel
 
 
+class List[T_item: BaseModel](BaseModel):
+    """Abstract immutable collection.
+
+    Used primarily for easier storage in Redis.
+    """
+
+    it: tuple[T_item, ...]
+
+
 class Segment(BaseModel):
     """Segment model."""
 
@@ -38,44 +47,8 @@ class User(BaseModel):
     id: int
 
 
-class Segments(BaseModel):
-    """Collection of segments.
-
-    Used primarily for easier storage in Redis.
-    """
-
-    items: tuple[Segment, ...]
-
-
-class Users(BaseModel):
-    """Collection of users.
-
-    Used primarily for easier storage in Redis
-    """
-
-    items: tuple[User, ...]
-
-
-class SegmentUser(BaseModel):
+class SegUsr(BaseModel):
     """Segment-to-user relation."""
 
     seg: UUID
     usr: int
-
-
-class SegmentUserList(BaseModel):
-    """Collection of segment-user relations.
-
-    Used primarily for easier storage in Redis.
-    """
-
-    items: tuple[SegmentUser, ...]
-
-
-class SegmentUsers(BaseModel):
-    """Collection of segment-to-user relations.
-
-    Used primarily for easier storage in Redis.
-    """
-
-    items: tuple[SegmentUser, ...]
