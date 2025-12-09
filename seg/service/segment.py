@@ -9,7 +9,7 @@ from asyncpg import UniqueViolationError
 from fastapi import Depends
 
 from seg.core import error
-from seg.core.backoff import backoff
+from seg.core.backoff import Backoff
 from seg.db.pg import (
     PG_CONNECTION_ERRORS,
     PostgresConnection,
@@ -24,6 +24,7 @@ from seg.model.segment import (
 )
 
 REDIS_TTL: Final[timedelta] = timedelta(minutes=5)
+backoff: Backoff = Backoff('Segment service')
 
 
 class SegmentService:
@@ -130,7 +131,6 @@ class SegmentService:
     @backoff(
         *PG_CONNECTION_ERRORS,
         max_retries=3,
-        service_name='Segment Service',
     )
     async def _sql_segment_select(
         self, *, limit: int, offset: int, name: str
@@ -173,7 +173,6 @@ class SegmentService:
     @backoff(
         *PG_CONNECTION_ERRORS,
         max_retries=3,
-        service_name='Segment Service',
     )
     async def _sql_segment_insert(
         self, segments: Sequence[ModelSegment]
@@ -205,7 +204,6 @@ class SegmentService:
     @backoff(
         *PG_CONNECTION_ERRORS,
         max_retries=3,
-        service_name='Segment Service',
     )
     async def _sql_segment_delete(
         self,
@@ -246,7 +244,6 @@ class SegmentService:
     @backoff(
         *PG_CONNECTION_ERRORS,
         max_retries=3,
-        service_name='Segment Service',
     )
     async def _sql_segment_update(
         self,
@@ -274,7 +271,6 @@ class SegmentService:
     @backoff(
         *REDIS_CONNECTION_ERRORS,
         max_retries=3,
-        service_name='Segment Service',
     )
     async def _redis_get(self, key: str) -> str | None:
         """Fetch value of a given Redis key.
@@ -288,7 +284,6 @@ class SegmentService:
     @backoff(
         *REDIS_CONNECTION_ERRORS,
         max_retries=3,
-        service_name='Segment Service',
     )
     async def _redis_set(self, key: str, value: str, expire: timedelta) -> None:  # noqa: WPS110
         """Creates/modifies new value in Redis with provided expiration time.
@@ -303,7 +298,6 @@ class SegmentService:
     @backoff(
         *REDIS_CONNECTION_ERRORS,
         max_retries=3,
-        service_name='Segment Service',
     )
     async def _redis_clear(self) -> None:
         """Clears Redis database.

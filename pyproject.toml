@@ -128,21 +128,17 @@ allowed-domain-names = [
 ignore = [
     'WPS201',   # many imports due to strict typing
     'WPS214',   # too many methods ???
+    'WPS226',   # this detection is kind of flawed ngl
 ]
 per-file-ignores = [
     # allow string literals overuse and magic numbers in endpoints
-    'seg/api/v1/segment.py:WPS226,WPS432',
-    'seg/api/v1/user.py:WPS226,WPS432',
-    'seg/api/v1/segment_user.py:WPS226,WPS432',
+    'seg/api/v1/segment.py:WPS432',
+    'seg/api/v1/user.py:WPS432',
+    'seg/api/v1/segment_user.py:WPS432',
 
     # I wouldn't call it too much cognitive complexity
-    'seg/core/backoff.py:WPS232,WPS231',
-
-    # Don't report string literal overuse in logging setup
-    'seg/core/log.py:WPS226',
-
-    # FIXME allow string literal overuse
-    'seg/service/*:WPS226'
+    # Too deep nesting kind of necessary for decorators
+    'seg/core/backoff.py:WPS232,WPS231,WPS220',
 ]
 
 [tool.deptry.per_rule_ignores]

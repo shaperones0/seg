@@ -8,7 +8,7 @@ from asyncpg import UniqueViolationError
 from fastapi import Depends
 
 from seg.core import error
-from seg.core.backoff import backoff
+from seg.core.backoff import Backoff
 from seg.db.pg import (
     PG_CONNECTION_ERRORS,
     PostgresConnection,
@@ -22,6 +22,7 @@ from seg.model.segment import (
 )
 
 REDIS_TTL: Final[timedelta] = timedelta(minutes=5)
+backoff: Backoff = Backoff('User service')
 
 
 class UserService:
@@ -95,7 +96,6 @@ class UserService:
     @backoff(
         *PG_CONNECTION_ERRORS,
         max_retries=3,
-        service_name='Segment Service',
     )
     async def _sql_user_select(
         self,
@@ -122,7 +122,6 @@ class UserService:
     @backoff(
         *PG_CONNECTION_ERRORS,
         max_retries=3,
-        service_name='Segment Service',
     )
     async def _sql_user_upsert(self, users: Sequence[ModelUser]) -> None:
         """Insert user IDs, ignore duplicate IDs.
@@ -140,7 +139,6 @@ class UserService:
     @backoff(
         *PG_CONNECTION_ERRORS,
         max_retries=3,
-        service_name='Segment Service',
     )
     async def _sql_user_delete(
         self,
@@ -161,7 +159,6 @@ class UserService:
     @backoff(
         *PG_CONNECTION_ERRORS,
         max_retries=3,
-        service_name='Segment Service',
     )
     async def _sql_user_update(
         self,

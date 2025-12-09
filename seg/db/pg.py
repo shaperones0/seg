@@ -7,7 +7,7 @@ import asyncpg
 from asyncpg.connection import Connection
 
 from seg.core import error
-from seg.core.backoff import backoff
+from seg.core.backoff import Backoff
 
 # see https://github.com/MagicStack/asyncpg/issues/513
 PG_CONNECTION_ERRORS: Final[error.ErrListType] = (
@@ -22,7 +22,7 @@ Connection.__class_getitem__ = classmethod(  # type: ignore[attr-defined]
 )
 
 PostgresConnection = Connection[asyncpg.Record]
-
+backoff = Backoff('Postgres Connection Pool')
 pg_conn_info: str | None = None
 
 
@@ -35,9 +35,7 @@ async def init(postgres_connection_info: str) -> None:
     pg_conn_info = postgres_connection_info
 
 
-@backoff(
-    *PG_CONNECTION_ERRORS, max_retries=3, service_name='DB Connection Pool'
-)
+@backoff(*PG_CONNECTION_ERRORS, max_retries=3)
 async def _connect() -> Connection:
     """Connect to Postgres.
 

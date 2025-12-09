@@ -8,11 +8,11 @@ from redis.asyncio import Redis as Redis
 
 from seg.core import error
 from seg.core import type as typ
-from seg.core.backoff import backoff
-
-redis_cache: Redis | None = None
+from seg.core.backoff import Backoff
 
 REDIS_CONNECTION_ERRORS: Final[error.ErrListType] = (RedisConnectionError,)
+backoff = Backoff('Redis Connection Pool')
+redis_cache: Redis | None = None
 
 
 def get_redis() -> Redis:
@@ -25,9 +25,7 @@ def get_redis() -> Redis:
     return redis_cache
 
 
-@backoff(
-    *REDIS_CONNECTION_ERRORS, max_retries=3, service_name='DB Connection Pool'
-)
+@backoff(*REDIS_CONNECTION_ERRORS, max_retries=3)
 async def _connect(
     *,
     host: str,

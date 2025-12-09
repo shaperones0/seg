@@ -7,7 +7,7 @@ from uuid import UUID
 
 from fastapi import Depends
 
-from seg.core.backoff import backoff
+from seg.core.backoff import Backoff
 from seg.db.pg import (
     PG_CONNECTION_ERRORS,
     PostgresConnection,
@@ -20,6 +20,7 @@ from seg.model.segment import (
 )
 
 REDIS_TTL: Final[timedelta] = timedelta(minutes=5)
+backoff: Backoff = Backoff('Segment-user service')
 
 
 class SegmentUserService:
@@ -120,7 +121,6 @@ class SegmentUserService:
     @backoff(
         *PG_CONNECTION_ERRORS,
         max_retries=3,
-        service_name='Segment Service',
     )
     async def _sql_su_select(
         self,
@@ -198,7 +198,6 @@ class SegmentUserService:
     @backoff(
         *PG_CONNECTION_ERRORS,
         max_retries=3,
-        service_name='Segment Service',
     )
     async def _sql_su_insert(self, sus: Sequence[ModelSegmentUser]) -> None:
         """Create new segment-user relations.
@@ -215,7 +214,6 @@ class SegmentUserService:
     @backoff(
         *PG_CONNECTION_ERRORS,
         max_retries=3,
-        service_name='Segment Service',
     )
     async def _sql_su_delete(
         self,
@@ -257,7 +255,6 @@ class SegmentUserService:
     @backoff(
         *REDIS_CONNECTION_ERRORS,
         max_retries=3,
-        service_name='Segment Service',
     )
     async def _redis_get(self, key: str) -> str | None:
         """Fetch value of a given Redis key.
@@ -271,7 +268,6 @@ class SegmentUserService:
     @backoff(
         *REDIS_CONNECTION_ERRORS,
         max_retries=3,
-        service_name='Segment Service',
     )
     async def _redis_set(self, key: str, value: str, expire: timedelta) -> None:  # noqa: WPS110
         """Creates/modifies new value in Redis with provided expiration time.
@@ -286,7 +282,6 @@ class SegmentUserService:
     @backoff(
         *REDIS_CONNECTION_ERRORS,
         max_retries=3,
-        service_name='Segment Service',
     )
     async def _redis_clear(self) -> None:
         """Clears Redis database.
