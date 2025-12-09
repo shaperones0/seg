@@ -1,7 +1,8 @@
 """Segment-user relation management service."""
 
-from collections.abc import Sequence
+from collections.abc import AsyncIterator, Sequence
 from datetime import timedelta
+from secrets import SystemRandom
 from typing import Annotated, Final, cast
 from uuid import UUID
 
@@ -18,9 +19,14 @@ from seg.model.segment import SegmentUser as ModelSegmentUser
 from seg.model.segment import (
     SegmentUserList as ModelSegmentUserList,
 )
+from seg.model.segment import (
+    User as ModelUser,
+)
 
 REDIS_TTL: Final[timedelta] = timedelta(minutes=5)
+USER_BATCH_SIZE: Final[int] = 1000
 backoff: Backoff = Backoff('Segment-user service')
+rng = SystemRandom()
 
 
 class SegmentUserService:
@@ -118,6 +124,38 @@ class SegmentUserService:
         )
         await self._redis_clear()
 
+    async def su_mass(
+        self,
+        *,
+        ratio: float,
+        segment_ids: Sequence[UUID],
+        subset_segment_id: UUID | None,
+    ) -> None:
+        """Mass assign segments to given ratio of users.
+
+        :param ratio: Ratio between 0 and 1.
+        :param segment_ids: Segments to assign.
+        :param subset_segment_id: Required segment for the users.
+        :raises BackoffError: Failed to connect to Postgres or Redis.
+        """
+        itr = (
+            self._sql_iterate_users_segment(subset_segment_id)
+            if subset_segment_id
+            else self._sql_iterate_users()
+        )
+        usr_batch: list[ModelSegmentUser] = []
+        async for usr in itr:
+            if rng.random() >= ratio:
+                continue
+            usr_batch.extend(
+                ModelSegmentUser(seg=seg, usr=usr.id) for seg in segment_ids
+            )
+            if len(usr_batch) >= USER_BATCH_SIZE:
+                await self._sql_su_insert(usr_batch)
+                usr_batch.clear()
+        if usr_batch:
+            await self._sql_su_insert(usr_batch)
+
     @backoff(
         *PG_CONNECTION_ERRORS,
         max_retries=3,
@@ -159,10 +197,10 @@ class SegmentUserService:
         elif user_ids:
             db_result = await self.db.fetch(
                 """SELECT *
-                   FROM segment_user
-                   WHERE usr = any ($1::int[])
-                   ORDER BY usr DESC
-                   LIMIT $2 OFFSET $3""",
+                FROM segment_user
+                WHERE usr = any ($1::int[])
+                ORDER BY usr DESC
+                LIMIT $2 OFFSET $3""",
                 user_ids,
                 limit,
                 offset,
@@ -170,10 +208,10 @@ class SegmentUserService:
         elif segment_ids:
             db_result = await self.db.fetch(
                 """SELECT *
-                   FROM segment_user
-                   WHERE seg = any ($1::uuid[])
-                   ORDER BY usr DESC
-                   LIMIT $2 OFFSET $3""",
+                FROM segment_user
+                WHERE seg = any ($1::uuid[])
+                ORDER BY usr DESC
+                LIMIT $2 OFFSET $3""",
                 segment_ids,
                 limit,
                 offset,
@@ -181,9 +219,9 @@ class SegmentUserService:
         else:
             db_result = await self.db.fetch(
                 """SELECT *
-                   FROM segment_user
-                   ORDER BY usr DESC
-                   LIMIT $1 OFFSET $2""",
+                FROM segment_user
+                ORDER BY usr DESC
+                LIMIT $1 OFFSET $2""",
                 limit,
                 offset,
             )
@@ -207,8 +245,10 @@ class SegmentUserService:
         :raises BackoffError: Failed to establish connection with Postgres.
         """
         await self.db.executemany(
-            'INSERT INTO segment_user (seg, usr) VALUES ($1, $2)',
-            ((su.segment, su.user) for su in sus),
+            """INSERT INTO segment_user (seg, usr)
+            VALUES ($1, $2)
+            ON CONFLICT (seg, usr) DO NOTHING""",
+            ((su.seg, su.usr) for su in sus),
         )
 
     @backoff(
@@ -247,10 +287,40 @@ class SegmentUserService:
         elif segment_ids:
             await self.db.execute(
                 """DELETE
-                   FROM segment_user
-                   WHERE seg = any($1::uuid[])""",
+                FROM segment_user
+                WHERE seg = any($1::uuid[])""",
                 segment_ids,
             )
+
+    async def _sql_iterate_users(self) -> AsyncIterator[ModelUser]:
+        """Iterate users.
+
+        :return: Users iterator.
+        """
+        async with self.db.transaction():
+            async for row in self.db.cursor('SELECT * FROM users'):
+                yield ModelUser(**row)
+
+    async def _sql_iterate_users_segment(
+        self, subset_segment_id: UUID
+    ) -> AsyncIterator[ModelUser]:
+        """Iterate users.
+
+        If ``subset_segment_id`` is not empty, yields users
+        only in provided segment.
+        :param subset_segment_id: Segment to iterate users on.
+        :return: Users from given segment iterator.
+        """
+        async with self.db.transaction():
+            async for row in self.db.cursor(
+                """SELECT *
+                    FROM users
+                    INNER JOIN segment_user
+                        ON users.id = segment_user.usr
+                        WHERE segment_user.seg = $1""",
+                subset_segment_id,
+            ):
+                yield ModelUser(**row)
 
     @backoff(
         *REDIS_CONNECTION_ERRORS,

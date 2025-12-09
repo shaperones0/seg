@@ -59,8 +59,8 @@ class Users(BaseModel):
 class SegmentUser(BaseModel):
     """Segment-to-user relation."""
 
-    segment: UUID
-    user: int
+    seg: UUID
+    usr: int
 
 
 class SegmentUserList(BaseModel):
